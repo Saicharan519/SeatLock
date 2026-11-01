@@ -16,14 +16,14 @@ Measured numbers only. Every figure says where and when it was measured. Per the
 
 ## Test suite
 
-Measured 2026-11-01 after Phase 6, on the machine above.
+Measured 2026-11-01 after Phase 7, on the machine above.
 
-| Measure                | Result                                                                                                                                                                          |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Tests                  | **82 passed / 82** (14 files)                                                                                                                                                   |
-| Full suite wall time   | 70–71 s (three runs). After Phase 5 it was 60–64 s with 69 tests                                                                                                                |
-| Consecutive green runs | Full suite: 3 of 3. Outbox tests: 3 of 3. Refund end-to-end tests: 3 of 3                                                                                                       |
-| GitHub Actions (Linux) | Green on every push: Phase 3 run 80 s, Phase 4 run 56 s, Phase 5 run 56 s, Phase 6 first run 640 s (an orphaned test process, fixed), after the fix 52 s (job time incl. setup) |
+| Measure                | Result                                                                                                                                                                                                                                        |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Tests                  | **101 passed / 101** (17 files)                                                                                                                                                                                                               |
+| Full suite wall time   | 68 s on Windows; 109 s in a Linux container (incl. Jest startup). After Phase 6: 70–71 s with 82 tests                                                                                                                                        |
+| Consecutive green runs | Phase 7 files: 2 of 2 each, plus full suite on Windows and Linux                                                                                                                                                                              |
+| GitHub Actions (Linux) | Green on every push: Phase 3 run 80 s, Phase 4 run 56 s, Phase 5 run 56 s, Phase 6 first run 640 s (an orphaned test process, fixed), after the fix 52 s, Phase 7 106 s with the added Redis service and 19 more tests (job time incl. setup) |
 
 ### Key tests
 
@@ -41,6 +41,9 @@ Measured 2026-11-01 after Phase 6, on the machine above.
 | Outbox backoff, base 10 s                                              | 0.2 s                                                                     | Successive delays measured at **10 s, 20 s, 40 s**                                                   |
 | **S9** end to end: cancel → gateway refund → webhook                   | 0.7 s                                                                     | Payment REFUNDED; the gateway received 1 refund call                                                 |
 | Refund consumer run twice                                              | 0.9 s                                                                     | **2 refund calls, 1 refund**, 1 `refund.succeeded` webhook                                           |
+| Rate limit: 25 concurrent logins, limit 10                             | 0.4 s                                                                     | **Exactly 10 allowed, 15 × 429** (atomic Lua increment + expiry)                                     |
+| **T13**: Redis unreachable, full register → login → hold → pay         | 0.3 s                                                                     | All succeed, no rate-limit headers, under the 3 s bound                                              |
+| **T13**: Redis frozen with `CLIENT PAUSE`                              | 1.0 s (test incl. setup)                                                  | Login allowed through by the 250 ms command timeout, under the 1.5 s bound                           |
 
 **These are correctness tests, not benchmarks.** T1's 7.5 s includes test setup and the test client's own overhead (supertest, a 200-socket pool on Windows). Latency and throughput will be measured with k6 in Phase 8.
 
@@ -52,6 +55,8 @@ Measured 2026-11-01 after Phase 6, on the machine above.
 
 ## Linux verification
 
+2026-11-01, Phase 7. Full suite in a `node:24-alpine` container with Postgres and Redis: **101 / 101 passed, Jest exited cleanly, 109 s**.
+
 2026-11-01, Phase 6. Full suite run inside a `node:24-alpine` container (Linux, fresh `npm ci`) against the same Postgres: **82 / 82 passed, Jest exited cleanly, 85 s**. Done because Windows had hidden an orphaned-process bug in T11 that made the first Phase 6 CI run hang (see the [Phase 6 write-up](phases/phase-6-outbox.md)).
 
 ## Real-process smoke tests
@@ -61,6 +66,12 @@ register → list shows → seat map → hold A1 (₹250.00) → pay (`202 INITI
 
 **2026-11-01, Phase 6.** API, mock gateway **and worker** (1 s tick) as three processes:
 hold → pay → **CONFIRMED** (1.5 s later) → worker published `BookingConfirmed` (1 notification) → cancel → worker published `RefundRequired` → gateway refund webhook → payment **REFUNDED** (within 3 s of the cancel).
+
+**2026-11-01, Phase 7 (T13 with a real outage).** API running, real Redis container:
+
+- Redis up: 11 bad logins → 10 × `401`, then `429`. Health `ok`.
+- `docker compose stop redis`: 5 more logins → all `401` (allowed, wrong password), no `429`, no hang (231 ms average per request incl. bcrypt and curl). Health `degraded`, HTTP 200. Logs: "redis unavailable", "rate limiter failing open".
+- `docker compose start redis`: the API logged "redis connected" about 3 s later on its own; 11 bad logins → 10 × `401`, then `429` again. Health `ok`.
 
 ## Load tests (k6)
 

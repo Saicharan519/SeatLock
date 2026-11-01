@@ -8,7 +8,7 @@ PostgreSQL enforces it with row locks, guarded updates and constraints, not just
 
 [![CI](https://github.com/Saicharan519/SeatLock/actions/workflows/ci.yml/badge.svg)](https://github.com/Saicharan519/SeatLock/actions/workflows/ci.yml)
 
-> **Status:** work in progress, Phases 0–6 of 10 complete; all core booking, payment and recovery logic is done. See [docs/PROGRESS.md](docs/PROGRESS.md).
+> **Status:** work in progress, Phases 0–7 of 10 complete; all 19 PRD acceptance tests pass. Next: load testing. See [docs/PROGRESS.md](docs/PROGRESS.md).
 
 ## What's proven so far
 
@@ -18,7 +18,8 @@ PostgreSQL enforces it with row locks, guarded updates and constraints, not just
 - **Payment-gateway timeouts never fail a booking**; signed webhooks decide, duplicates are no-ops
 - **Late payments re-claim all seats or refund**, never partially confirm
 - **A worker killed mid-task loses nothing**: its lease expires, another worker re-delivers the event, and the customer still gets exactly one notification (transactional outbox, at-least-once delivery, idempotent consumers)
-- 82 integration tests against a real PostgreSQL, green in CI
+- **Redis going down doesn't take the API down**: rate limiting fails open without blocking requests, and resumes when Redis returns (verified by stopping the real Redis container)
+- 101 integration tests against a real PostgreSQL and Redis, green in CI
 
 Measured numbers and machine specs: [docs/results.md](docs/results.md).
 
@@ -39,7 +40,7 @@ Client ──REST──▶ API (Express, TS) ──SQL──▶ PostgreSQL (sour
 
 - **Three processes, one repo:** `apps/api`, `apps/worker`, `apps/mock-gateway`; shared code in `packages/db` and `packages/shared`.
 - **Raw parameterized SQL**, no ORM, so locks and atomic updates are explicit.
-- **Redis** is used for rate limiting only (Phase 7).
+- **Redis** is used for rate limiting only, and the API keeps working without it (fail open).
 
 ## Stack
 
@@ -73,18 +74,20 @@ npm test
 
 ## API overview
 
-| Method | Path                                                   | Notes                                                             |
-| ------ | ------------------------------------------------------ | ----------------------------------------------------------------- |
-| POST   | `/api/auth/register`, `/api/auth/login`                | Returns a JWT                                                     |
-| GET    | `/api/shows`, `/api/shows/:id`, `/api/shows/:id/seats` | Seat map treats expired holds as available                        |
-| POST   | `/api/holds`                                           | Hold 1–6 seats for 5 minutes. Requires `Idempotency-Key`          |
-| POST   | `/api/holds/:bookingId/release`                        | Give up a hold                                                    |
-| POST   | `/api/bookings/:id/pay`                                | `202`; the gateway's webhook confirms. Requires `Idempotency-Key` |
-| GET    | `/api/bookings/me`, `/api/bookings/:id`                | History and detail                                                |
-| POST   | `/api/bookings/:id/cancel`                             | Whole-booking cancellation with refund                            |
-| POST   | `/api/webhooks/payment`                                | HMAC-signed gateway callbacks                                     |
-| POST   | `/api/admin/shows`                                     | Admin only; creates a show and its 50 seats                       |
-| GET    | `/api/health`                                          | Database reachability                                             |
+| Method | Path                                                   | Notes                                                                                         |
+| ------ | ------------------------------------------------------ | --------------------------------------------------------------------------------------------- |
+| POST   | `/api/auth/register`, `/api/auth/login`                | Returns a JWT. Rate limited: 10/min per IP                                                    |
+| GET    | `/api/shows`, `/api/shows/:id`, `/api/shows/:id/seats` | Seat map treats expired holds as available                                                    |
+| POST   | `/api/holds`                                           | Hold 1–6 seats for 5 minutes. Requires `Idempotency-Key`. Holds and pay share 30/min per user |
+| POST   | `/api/holds/:bookingId/release`                        | Give up a hold                                                                                |
+| POST   | `/api/bookings/:id/pay`                                | `202`; the gateway's webhook confirms. Requires `Idempotency-Key`                             |
+| GET    | `/api/bookings/me`, `/api/bookings/:id`                | History and detail                                                                            |
+| POST   | `/api/bookings/:id/cancel`                             | Whole-booking cancellation with refund                                                        |
+| POST   | `/api/webhooks/payment`                                | HMAC-signed gateway callbacks                                                                 |
+| POST   | `/api/admin/shows`                                     | Admin only; creates a show and its 50 seats                                                   |
+| GET    | `/api/admin/outbox-events?status=FAILED`               | Admin only; inspect outbox events                                                             |
+| POST   | `/api/admin/outbox-events/:id/retry`                   | Admin only; send a FAILED event back for delivery                                             |
+| GET    | `/api/health`                                          | Database and Redis reachability (Redis down = `degraded`, still 200)                          |
 
 Errors share one shape: `{ "error": { "code", "message", "requestId" } }`.
 

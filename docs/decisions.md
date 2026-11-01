@@ -105,16 +105,36 @@ Made before coding, after two independent reviews of the PRD.
 | F9  | The **gateway client lives in the shared package**                                      | A copy per app                                               | The API charges and the worker refunds with the same client                                                                                                            |
 | F10 | The outbox is processed on the worker's normal **5-second tick**                        | `LISTEN/NOTIFY` for instant pickup                           | Simpler; up to 5 s of notification latency is acceptable. A possible later improvement                                                                                 |
 
+## G. Hardening (Phase 7)
+
+| #   | Decision                                                                                                | Rejected                             | Why                                                                                                                                       |
+| --- | ------------------------------------------------------------------------------------------------------- | ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| G1  | **Fixed-window** counters in Redis                                                                      | Sliding window / token bucket        | Simple and explainable; abuse protection doesn't need precision. Trade-off: up to 2× the limit across a window boundary                   |
+| G2  | Increment and expiry in **one Lua script**                                                              | INCR then EXPIRE as two commands     | Two commands can interleave so a counter never gets an expiry and blocks a client forever                                                 |
+| G3  | Holds and pay **share one** per-user bucket (30/min)                                                    | Separate buckets                     | Matches the PRD's "holds and pay 30 req/min per user"; one booking flow, one budget                                                       |
+| G4  | Auth limited **per IP**; `TRUST_PROXY` off by default                                                   | Always trusting `X-Forwarded-For`    | Behind a proxy every request shares the proxy's IP, but trusting the header without a proxy lets clients fake their IP                    |
+| G5  | **Fail open** on any Redis error                                                                        | Fail closed                          | Redis only protects Postgres; failing closed turns a Redis outage into a full outage (PRD 6)                                              |
+| G6  | Redis client: **no offline queue, 0 retries per request, 250 ms command timeout**, background reconnect | Library defaults                     | Defaults queue commands while disconnected, so requests would hang instead of failing open                                                |
+| G7  | Health: database down **503**, Redis down **200 degraded**                                              | 503 for any dependency               | A load balancer would pull healthy instances out of rotation during a Redis outage the API survives                                       |
+| G8  | Transitions logged **after commit** via an `afterCommit` hook in the transaction helper                 | Logging at the UPDATE                | Rolled-back transitions (failed holds, deadlock retries) would appear in the logs as if they happened                                     |
+| G9  | Logging hooks into the **two guarded-transition functions**                                             | Logging at each call site            | Every booking and payment transition is covered in one place                                                                              |
+| G10 | **`POST /admin/outbox-events/:id/retry`**, beyond the PRD                                               | Inspect-only, fix with SQL           | A guarded FAILED → PENDING with a fresh attempt budget is safer than hand-written SQL; `last_error` is kept as history                    |
+| G11 | Rate-limit tests use **Redis database 1**, flushed per test; CI gets a Redis service                    | Sharing database 0                   | Tests never touch dev data                                                                                                                |
+| G12 | The health test uses a **stub** for "Redis down"; real unreachable clients only mid-file in T13         | A real unreachable client everywhere | ioredis keeps the process alive ~2.3 s after a refused connection (measured), which delays Jest's exit if it happens at the end of a file |
+
 ## Known limitations (documented, not bugs)
 
 - **Crash between the pay commit and the gateway call:** the payment stays INITIATED and the gateway never sees it. A same-key retry replays the 202 without calling the gateway. The hold expires, and the sweep fails the payment after 15 minutes.
 - **Lost webhook:** the payment stays INITIATED until the sweep (15 min); the checkout UI shows "processing" until then. No gateway polling (PRD non-goal).
 - **`now()` is the transaction start time**, so a confirmation can land slightly after nominal expiry by the length of a lock wait. Safe, because seat ownership is re-verified under lock.
 - **Role changes** take effect only on the next login (JWT carries the role, 1-hour expiry).
-- **Rate limiting** isn't implemented yet (Phase 7).
+- **Fixed-window rate limiting** allows up to twice the limit across a window boundary.
+- **While Redis is down there is no rate limiting at all** (fail open, by design), logged as a warning every 10 s.
+- **ioredis keeps a process alive for about 2.3 s after a refused connection** (measured on Windows and Linux). No effect on requests; only relevant to test teardown.
+- **The admin retry is per event**; there's no bulk retry.
 - **Delivery is at-least-once**, never exactly-once. Both consumers are idempotent (unique `event_id`; the gateway dedupes refunds per payment).
 - **A slow-but-alive handler** whose lease expires can overlap with a second worker running the same event. Harmless because consumers are idempotent, and the fencing token keeps only one result.
 - **Notification latency** is up to one worker tick (5 s), since the outbox is polled rather than pushed.
-- **FAILED outbox events** need manual attention; the admin endpoint to list them comes in Phase 7.
+- **FAILED outbox events** need a human to fix the cause, then retry them through the admin endpoint.
 - **The mock gateway keeps state in memory.** If it restarts, refunds for charges made before the restart fail (unknown payment) and end up FAILED after retries.
 - **Local test environment:** on desktop Windows, tests that open hundreds of simultaneous connections need the client socket pool (E4). Linux CI doesn't.
