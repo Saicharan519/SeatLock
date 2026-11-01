@@ -15,6 +15,23 @@ export async function createUser(pool: Pool, role: 'USER' | 'ADMIN' = 'USER') {
   return { id, token: signToken({ id, role }, process.env.JWT_SECRET!) };
 }
 
+/** Inserts n users in one statement. For concurrency tests that need hundreds of users. */
+export async function createUsers(pool: Pool, n: number) {
+  const batch = `${Date.now()}-${(counter += 1)}`;
+  const { rows } = await pool.query<{ id: string }>(
+    `INSERT INTO users (name, email, password_hash)
+     SELECT 'Load ' || g, 'load' || g || '-' || $2 || '@test.local', 'not-a-real-hash'
+     FROM generate_series(1, $1) AS g
+     ORDER BY g
+     RETURNING id`,
+    [n, batch],
+  );
+  return rows.map(({ id }) => ({
+    id,
+    token: signToken({ id, role: 'USER' }, process.env.JWT_SECRET!),
+  }));
+}
+
 /** Inserts a show and its 50 seats. Defaults to one day in the future. */
 export async function createShow(
   pool: Pool,

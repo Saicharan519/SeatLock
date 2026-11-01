@@ -3,14 +3,17 @@ import type { Pool } from 'pg';
 import type { Logger } from '@seatlock/shared';
 import type { ApiConfig } from './config/env';
 import { createAuthController } from './controllers/authController';
+import { createHoldController } from './controllers/holdController';
 import { createShowController } from './controllers/showController';
 import { requireAuth } from './middleware/auth';
 import { errorHandler, notFound } from './middleware/errorHandler';
 import { requestLogger } from './middleware/requestLogger';
 import { authRouter } from './routes/auth';
 import { healthRouter } from './routes/health';
+import { holdsRouter } from './routes/holds';
 import { showsRouter } from './routes/shows';
 import { createAuthService } from './services/authService';
+import { createHoldService } from './services/holdService';
 import { createShowService } from './services/showService';
 
 export interface AppDeps {
@@ -24,6 +27,10 @@ export function createApp({ pool, config, logger }: AppDeps): Express {
   const authenticate = requireAuth(config.JWT_SECRET);
   const authController = createAuthController(createAuthService(pool, config));
   const showController = createShowController(createShowService(pool));
+  const holdController = createHoldController(
+    createHoldService(pool, config),
+    config.MAX_SEATS_PER_HOLD,
+  );
 
   const app = express();
   app.disable('x-powered-by');
@@ -33,6 +40,7 @@ export function createApp({ pool, config, logger }: AppDeps): Express {
   app.use('/api', healthRouter(pool));
   app.use('/api', authRouter(authController, authenticate));
   app.use('/api', showsRouter(showController, authenticate));
+  app.use('/api', holdsRouter(holdController, authenticate));
 
   app.use(notFound);
   app.use(errorHandler);
