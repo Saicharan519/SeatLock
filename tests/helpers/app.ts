@@ -2,7 +2,7 @@ import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import type { Express } from 'express';
 import type { Pool } from 'pg';
-import { createLogger, type GatewayClient } from '@seatlock/shared';
+import { createLogger, type GatewayClient, type Redis } from '@seatlock/shared';
 import { createApp } from '../../apps/api/src/app';
 import { loadApiConfig, type ApiConfig } from '../../apps/api/src/config/env';
 import { createGatewayApp, type Mode } from '../../apps/mock-gateway/src/app';
@@ -21,12 +21,14 @@ export function createTestApp(
   pool: Pool,
   overrides: Partial<ApiConfig> = {},
   gateway: GatewayClient = acceptingGateway,
+  redis: Redis | null = null,
 ) {
   return createApp({
     pool,
     config: { ...loadApiConfig(), ...overrides },
     logger: silent,
     gateway,
+    redis,
   });
 }
 

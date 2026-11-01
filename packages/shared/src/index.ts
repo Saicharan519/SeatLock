@@ -7,6 +7,7 @@ export {
   SIGNATURE_TOLERANCE_SECONDS,
 } from './webhookSignature';
 export { createHttpGatewayClient, type ChargeOutcome, type GatewayClient } from './gatewayClient';
+export { createRedisClient, type Redis } from './redis';
 
 /** Webhook event payload, shared by the mock gateway (sender) and the API (receiver). */
 export interface GatewayEvent {

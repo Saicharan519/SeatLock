@@ -12,6 +12,13 @@ const apiEnvSchema = baseEnvSchema.extend({
   GATEWAY_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
   /** Base URL the gateway uses to reach our webhook endpoint */
   API_PUBLIC_URL: z.url().default('http://localhost:3000'),
+  REDIS_URL: z.string().default('redis://localhost:6379'),
+  /** Disable for load tests (and say so when reporting the numbers) */
+  RATE_LIMIT_ENABLED: z.stringbool().default(true),
+  RATE_LIMIT_AUTH_PER_MINUTE: z.coerce.number().int().positive().default(10),
+  RATE_LIMIT_BOOKING_PER_MINUTE: z.coerce.number().int().positive().default(30),
+  /** Only behind a trusted reverse proxy: makes req.ip come from X-Forwarded-For */
+  TRUST_PROXY: z.stringbool().default(false),
 });
 
 export type ApiConfig = z.infer<typeof apiEnvSchema>;

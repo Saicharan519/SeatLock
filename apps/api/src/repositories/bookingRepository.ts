@@ -1,4 +1,5 @@
 import type { PoolClient } from 'pg';
+import { logTransition } from '../utils/transitionLog';
 
 export type BookingStatus = 'PENDING' | 'CONFIRMED' | 'CANCELLED' | 'EXPIRED' | 'FAILED';
 
@@ -66,6 +67,7 @@ export async function transitionBooking(
     `UPDATE bookings SET status = $3, updated_at = now() WHERE id = $1 AND status = $2`,
     [bookingId, from, to],
   );
+  if (rowCount === 1) logTransition(client, 'booking', bookingId, from, to);
   return rowCount === 1;
 }
 

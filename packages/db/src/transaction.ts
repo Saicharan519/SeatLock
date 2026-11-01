@@ -22,6 +22,20 @@ export function isRetryable(err: unknown): boolean {
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+/** Callbacks waiting for the open transaction on each client to commit. */
+const pendingAfterCommit = new WeakMap<PoolClient, (() => void)[]>();
+
+/**
+ * Runs fn once the client's current transaction COMMITS, and never if it rolls back.
+ * Used for side effects that must only reflect committed state, like logging a transition.
+ * Outside withTransaction there is nothing to wait for, so fn runs immediately.
+ */
+export function afterCommit(client: PoolClient, fn: () => void): void {
+  const pending = pendingAfterCommit.get(client);
+  if (pending) pending.push(fn);
+  else fn();
+}
+
 /**
  * Runs fn inside BEGIN/COMMIT at READ COMMITTED (R1). Deadlocks, serialization
  * failures and lock timeouts are retried up to 3 times with jitter (R4).
@@ -36,12 +50,24 @@ export async function withTransaction<T>(
 ): Promise<T> {
   for (let attempt = 1; ; attempt++) {
     const client = await pool.connect();
+    const callbacks: (() => void)[] = [];
+    pendingAfterCommit.set(client, callbacks);
     try {
       await client.query('BEGIN');
       const result = await fn(client);
       await client.query('COMMIT');
+      pendingAfterCommit.delete(client);
+      for (const cb of callbacks) {
+        try {
+          cb();
+        } catch {
+          // A failing callback (e.g. logging) must not turn a committed transaction into an error
+        }
+      }
       return result;
     } catch (err) {
+      // Rolled back (or about to retry): the callbacks describe things that didn't happen
+      pendingAfterCommit.delete(client);
       await client.query('ROLLBACK').catch(() => undefined);
       if (!isRetryable(err)) throw err;
       if (attempt >= MAX_ATTEMPTS) throw new RetryExhaustedError(err);

@@ -1,5 +1,6 @@
 import type { PoolClient } from 'pg';
 import type { Queryable } from '@seatlock/db';
+import { logTransition } from '../utils/transitionLog';
 
 export type PaymentStatus = 'INITIATED' | 'SUCCESS' | 'FAILED' | 'REFUND_REQUIRED' | 'REFUNDED';
 
@@ -63,5 +64,6 @@ export async function transitionPayment(
      WHERE id = $1 AND status = $2`,
     [paymentId, from, to, refs.providerReference ?? null, refs.refundReference ?? null],
   );
+  if (rowCount === 1) logTransition(client, 'payment', paymentId, from, to);
   return rowCount === 1;
 }

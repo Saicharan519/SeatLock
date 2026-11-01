@@ -31,10 +31,10 @@ const outboxOptions = {
 /** Jobs run in sequence each tick. */
 const jobs: { name: string; run: () => Promise<number> }[] = [
   { name: 'processOutbox', run: () => processOutbox(pool, outboxOptions) },
-  { name: 'expireHolds', run: () => expireHolds(pool) },
+  { name: 'expireHolds', run: () => expireHolds(pool, undefined, logger) },
   {
     name: 'sweepStuckPayments',
-    run: () => sweepStuckPayments(pool, config.PAYMENT_STUCK_AFTER_SECONDS),
+    run: () => sweepStuckPayments(pool, config.PAYMENT_STUCK_AFTER_SECONDS, undefined, logger),
   },
   { name: 'cleanupIdempotencyKeys', run: () => cleanupIdempotencyKeys(pool) },
 ];

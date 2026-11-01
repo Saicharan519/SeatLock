@@ -1,4 +1,5 @@
 import type { Pool } from 'pg';
+import type { Logger } from '@seatlock/shared';
 
 const BATCH_SIZE = 100;
 
@@ -18,10 +19,12 @@ export async function sweepStuckPayments(
   pool: Pool,
   stuckAfterSeconds: number,
   batchSize = BATCH_SIZE,
+  logger?: Logger,
 ): Promise<number> {
   let total = 0;
   for (;;) {
-    const { rowCount } = await pool.query(
+    // A single statement commits on its own, so logging after it reflects committed state
+    const { rows } = await pool.query<{ id: string }>(
       `UPDATE payments SET status = 'FAILED', updated_at = now()
        WHERE id IN (
          SELECT id FROM payments
@@ -30,10 +33,14 @@ export async function sweepStuckPayments(
          LIMIT $2
          FOR UPDATE SKIP LOCKED
        )
-       AND status = 'INITIATED'`,
+       AND status = 'INITIATED'
+       RETURNING id`,
       [stuckAfterSeconds, batchSize],
     );
-    const swept = rowCount ?? 0;
+    for (const { id } of rows) {
+      logger?.info({ entity: 'payment', id, from: 'INITIATED', to: 'FAILED' }, 'state transition');
+    }
+    const swept = rows.length;
     total += swept;
     if (swept < batchSize) return total;
   }

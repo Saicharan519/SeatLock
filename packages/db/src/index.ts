@@ -1,5 +1,5 @@
 export { createPool, type PoolOptions } from './pool';
-export { withTransaction, isRetryable, RetryExhaustedError } from './transaction';
+export { withTransaction, afterCommit, isRetryable, RetryExhaustedError } from './transaction';
 export {
   insertSeatsForShow,
   seatLabels,
