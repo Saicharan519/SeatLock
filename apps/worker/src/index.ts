@@ -1,9 +1,11 @@
 import { createPool } from '@seatlock/db';
-import { createLogger } from '@seatlock/shared';
+import { createHttpGatewayClient, createLogger } from '@seatlock/shared';
 import { loadWorkerConfig } from './config';
+import { createConsumers } from './consumers';
 import { cleanupIdempotencyKeys } from './jobs/cleanupIdempotencyKeys';
 import { expireHolds } from './jobs/expireHolds';
 import { sweepStuckPayments } from './jobs/sweepStuckPayments';
+import { processOutbox } from './outbox/processOutbox';
 
 const config = loadWorkerConfig();
 const logger = createLogger('worker', config.LOG_LEVEL);
@@ -13,8 +15,22 @@ const pool = createPool({
   acquireTimeoutMs: config.PG_POOL_ACQUIRE_TIMEOUT_MS,
 });
 
-/** Jobs run in sequence each tick. The outbox processor joins in Phase 6. */
+const outboxOptions = {
+  consumers: createConsumers({
+    pool,
+    gateway: createHttpGatewayClient(config.GATEWAY_URL, config.GATEWAY_TIMEOUT_MS),
+    webhookUrl: new URL('/api/webhooks/payment', config.API_PUBLIC_URL).toString(),
+  }),
+  logger,
+  leaseSeconds: config.OUTBOX_LEASE_SECONDS,
+  handlerTimeoutMs: config.OUTBOX_HANDLER_TIMEOUT_MS,
+  maxAttempts: config.OUTBOX_MAX_ATTEMPTS,
+  backoffBaseMs: config.OUTBOX_BACKOFF_BASE_MS,
+};
+
+/** Jobs run in sequence each tick. */
 const jobs: { name: string; run: () => Promise<number> }[] = [
+  { name: 'processOutbox', run: () => processOutbox(pool, outboxOptions) },
   { name: 'expireHolds', run: () => expireHolds(pool) },
   {
     name: 'sweepStuckPayments',

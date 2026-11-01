@@ -1,6 +1,6 @@
 import express, { type Express } from 'express';
 import type { Pool } from 'pg';
-import type { Logger } from '@seatlock/shared';
+import { createHttpGatewayClient, type GatewayClient, type Logger } from '@seatlock/shared';
 import type { ApiConfig } from './config/env';
 import { createAuthController } from './controllers/authController';
 import { createBookingController } from './controllers/bookingController';
@@ -18,7 +18,6 @@ import { showsRouter } from './routes/shows';
 import { webhooksRouter } from './routes/webhooks';
 import { createAuthService } from './services/authService';
 import { createBookingService } from './services/bookingService';
-import { createHttpGatewayClient, type GatewayClient } from './services/gatewayClient';
 import { createHoldService } from './services/holdService';
 import { createPaymentService } from './services/paymentService';
 import { createShowService } from './services/showService';

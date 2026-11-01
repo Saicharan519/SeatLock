@@ -6,6 +6,7 @@ export {
   SIGNATURE_HEADER,
   SIGNATURE_TOLERANCE_SECONDS,
 } from './webhookSignature';
+export { createHttpGatewayClient, type ChargeOutcome, type GatewayClient } from './gatewayClient';
 
 /** Webhook event payload, shared by the mock gateway (sender) and the API (receiver). */
 export interface GatewayEvent {

@@ -11,7 +11,7 @@ import {
 import * as payments from '../repositories/paymentRepository';
 import { AppError } from '../utils/errors';
 import { hashRequest } from '../utils/idempotency';
-import type { GatewayClient } from './gatewayClient';
+import type { GatewayClient } from '@seatlock/shared';
 
 const PAY_ENDPOINT = 'POST /api/bookings/:id/pay';
 

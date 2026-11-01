@@ -2,10 +2,9 @@ import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import type { Express } from 'express';
 import type { Pool } from 'pg';
-import { createLogger } from '@seatlock/shared';
+import { createLogger, type GatewayClient } from '@seatlock/shared';
 import { createApp } from '../../apps/api/src/app';
 import { loadApiConfig, type ApiConfig } from '../../apps/api/src/config/env';
-import type { GatewayClient } from '../../apps/api/src/services/gatewayClient';
 import { createGatewayApp, type Mode } from '../../apps/mock-gateway/src/app';
 
 /** Silent by default. TEST_LOG_LEVEL=error npx jest ... shows server-side errors when debugging. */
@@ -82,6 +81,8 @@ export async function startPaymentStack(pool: Pool, overrides: Partial<ApiConfig
 
   return {
     api: apiServer,
+    apiUrl: urlOf(apiServer),
+    gatewayUrl: urlOf(gatewayServer),
     gateway: gateway.state,
     setMode: (mode: Mode, opts: { delayMs?: number; lateMs?: number } = {}) =>
       Object.assign(gateway.state.settings, { mode, ...opts }),

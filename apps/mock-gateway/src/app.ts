@@ -65,6 +65,7 @@ export function createGatewayApp(opts: GatewayOptions) {
   const charges = new Map<string, Charge>();
   const refunds = new Map<string, string>();
   const chargeCalls = new Map<string, number>();
+  const refundCalls = new Map<string, number>();
   const timers = new Set<NodeJS.Timeout>();
 
   const later = (ms: number, fn: () => void) => {
@@ -145,6 +146,7 @@ export function createGatewayApp(opts: GatewayOptions) {
     const input = refundSchema.safeParse(req.body);
     if (!input.success) return res.status(400).json({ error: 'invalid_request' });
     const { paymentId, callbackUrl } = input.data;
+    refundCalls.set(paymentId, (refundCalls.get(paymentId) ?? 0) + 1);
     const charge = charges.get(paymentId);
     if (!charge) return res.status(404).json({ error: 'unknown_payment' });
 
@@ -177,7 +179,7 @@ export function createGatewayApp(opts: GatewayOptions) {
 
   return {
     app,
-    state: { settings, charges, refunds, chargeCalls },
+    state: { settings, charges, refunds, chargeCalls, refundCalls },
     /** Cancels pending webhooks so tests can shut down cleanly. */
     stop: () => {
       for (const t of timers) clearTimeout(t);
