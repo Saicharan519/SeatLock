@@ -1,7 +1,9 @@
 import { createPool } from '@seatlock/db';
 import { createLogger } from '@seatlock/shared';
 import { loadWorkerConfig } from './config';
+import { cleanupIdempotencyKeys } from './jobs/cleanupIdempotencyKeys';
 import { expireHolds } from './jobs/expireHolds';
+import { sweepStuckPayments } from './jobs/sweepStuckPayments';
 
 const config = loadWorkerConfig();
 const logger = createLogger('worker', config.LOG_LEVEL);
@@ -11,9 +13,14 @@ const pool = createPool({
   acquireTimeoutMs: config.PG_POOL_ACQUIRE_TIMEOUT_MS,
 });
 
-/** Jobs run in sequence each tick. Payment sweep, outbox and key cleanup join in later phases. */
+/** Jobs run in sequence each tick. The outbox processor joins in Phase 6. */
 const jobs: { name: string; run: () => Promise<number> }[] = [
   { name: 'expireHolds', run: () => expireHolds(pool) },
+  {
+    name: 'sweepStuckPayments',
+    run: () => sweepStuckPayments(pool, config.PAYMENT_STUCK_AFTER_SECONDS),
+  },
+  { name: 'cleanupIdempotencyKeys', run: () => cleanupIdempotencyKeys(pool) },
 ];
 
 let stopping = false;

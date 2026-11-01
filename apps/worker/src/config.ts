@@ -4,6 +4,8 @@ import { baseEnvSchema, loadEnv } from '@seatlock/shared';
 const workerEnvSchema = baseEnvSchema.extend({
   WORKER_INTERVAL_MS: z.coerce.number().int().positive().default(5000),
   PG_POOL_MAX: z.coerce.number().int().positive().default(5),
+  /** A payment INITIATED for longer than this with no webhook is marked FAILED */
+  PAYMENT_STUCK_AFTER_SECONDS: z.coerce.number().int().positive().default(900),
 });
 
 export type WorkerConfig = z.infer<typeof workerEnvSchema>;

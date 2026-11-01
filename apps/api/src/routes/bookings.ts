@@ -10,5 +10,6 @@ export function bookingsRouter(
   router.get('/bookings/me', authenticate, controller.listMine);
   router.get('/bookings/:id', authenticate, controller.get);
   router.post('/bookings/:id/pay', authenticate, controller.pay);
+  router.post('/bookings/:id/cancel', authenticate, controller.cancel);
   return router;
 }

@@ -4,7 +4,11 @@ import type { Pool } from 'pg';
 import { signWebhook, SIGNATURE_HEADER, type GatewayEvent } from '@seatlock/shared';
 import { createTestApp } from '../helpers/app';
 import { createTestPool, resetDatabase } from '../helpers/db';
-import { createShow, createUser } from '../helpers/factories';
+import {
+  deliverEvent,
+  gatewayEvent,
+  pendingPayment as createPendingPayment,
+} from '../helpers/webhooks';
 
 /**
  * The webhook handler driven directly with hand-signed events, so every row of the
@@ -23,52 +27,10 @@ describe('POST /api/webhooks/payment (FR-10, PRD 9.3)', () => {
   afterAll(() => pool.end());
   beforeEach(() => resetDatabase(pool));
 
-  /** Holds A1, A2 and starts a payment. Returns ids for building events. */
-  async function pendingPayment() {
-    const showId = await createShow(pool, { pricePerSeat: 20000 });
-    const user = await createUser(pool);
-    const hold = await request(app)
-      .post('/api/holds')
-      .set('Authorization', `Bearer ${user.token}`)
-      .set('Idempotency-Key', randomUUID())
-      .send({ showId, seats: ['A1', 'A2'] });
-    const pay = await request(app)
-      .post(`/api/bookings/${hold.body.bookingId}/pay`)
-      .set('Authorization', `Bearer ${user.token}`)
-      .set('Idempotency-Key', randomUUID())
-      .send();
-    return {
-      showId,
-      bookingId: hold.body.bookingId as string,
-      paymentId: pay.body.paymentId as string,
-    };
-  }
-
-  const event = (
-    type: GatewayEvent['type'],
-    paymentId: string,
-    extra: Partial<GatewayEvent['data']> = {},
-  ): GatewayEvent => ({
-    id: `evt_${randomUUID()}`,
-    type,
-    data: { paymentId, chargeId: 'ch_123', amount: 40000, ...extra },
-    createdAt: new Date().toISOString(),
-  });
-
-  const deliver = (
-    e: GatewayEvent,
-    opts: { timestamp?: number; signWith?: string; body?: string } = {},
-  ) => {
-    const body = opts.body ?? JSON.stringify(e);
-    return request(app)
-      .post('/api/webhooks/payment')
-      .set('content-type', 'application/json')
-      .set(
-        SIGNATURE_HEADER,
-        signWebhook(opts.signWith ?? secret, JSON.stringify(e), opts.timestamp),
-      )
-      .send(body);
-  };
+  const pendingPayment = () => createPendingPayment(pool, app);
+  const event = gatewayEvent;
+  const deliver = (e: GatewayEvent, opts?: Parameters<typeof deliverEvent>[2]) =>
+    deliverEvent(app, e, opts);
 
   const state = async (bookingId: string) =>
     (

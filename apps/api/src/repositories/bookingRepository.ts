@@ -196,6 +196,58 @@ export async function markSeatsBooked(
   return rowCount ?? 0;
 }
 
+/**
+ * Late-payment re-claim (PRD 9.3): how many of these seats this booking could take now.
+ * A seat qualifies if it is AVAILABLE, still HELD by this booking, or HELD by any booking
+ * whose hold has expired. A seat that is BOOKED or under someone's live hold does not.
+ * Call with the seats locked.
+ */
+export async function countSeatsClaimableLate(
+  client: PoolClient,
+  seatIds: string[],
+  bookingId: string,
+): Promise<number> {
+  const { rows } = await client.query<{ n: number }>(
+    `SELECT count(*)::int AS n FROM seats s
+     WHERE s.id = ANY($1::bigint[])
+       AND ( s.status = 'AVAILABLE'
+             OR ( s.status = 'HELD'
+                  AND ( s.booking_id = $2
+                        OR EXISTS (SELECT 1 FROM bookings b
+                                   WHERE b.id = s.booking_id AND b.expires_at < now()) ) ) )`,
+    [seatIds, bookingId],
+  );
+  return rows[0]!.n;
+}
+
+/** Takes seats straight to BOOKED for this booking. Only after countSeatsClaimableLate passed. */
+export async function bookSeats(
+  client: PoolClient,
+  seatIds: string[],
+  bookingId: string,
+): Promise<number> {
+  const { rowCount } = await client.query(
+    `UPDATE seats SET status = 'BOOKED', booking_id = $2, updated_at = now()
+     WHERE id = ANY($1::bigint[])`,
+    [seatIds, bookingId],
+  );
+  return rowCount ?? 0;
+}
+
+/** Cancellation: BOOKED -> AVAILABLE for this booking's seats. Seats must be locked. */
+export async function releaseBookedSeats(
+  client: PoolClient,
+  seatIds: string[],
+  bookingId: string,
+): Promise<number> {
+  const { rowCount } = await client.query(
+    `UPDATE seats SET status = 'AVAILABLE', booking_id = NULL, updated_at = now()
+     WHERE id = ANY($1::bigint[]) AND booking_id = $2 AND status = 'BOOKED'`,
+    [seatIds, bookingId],
+  );
+  return rowCount ?? 0;
+}
+
 /** Sets is_confirmed, the column the one_confirmed_per_seat index enforces. */
 export async function setItemsConfirmed(
   client: PoolClient,

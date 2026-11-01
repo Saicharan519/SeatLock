@@ -8,7 +8,8 @@ import { loadApiConfig, type ApiConfig } from '../../apps/api/src/config/env';
 import type { GatewayClient } from '../../apps/api/src/services/gatewayClient';
 import { createGatewayApp, type Mode } from '../../apps/mock-gateway/src/app';
 
-const silent = createLogger('test', 'silent');
+/** Silent by default. TEST_LOG_LEVEL=error npx jest ... shows server-side errors when debugging. */
+const silent = createLogger('test', process.env.TEST_LOG_LEVEL ?? 'silent');
 
 /** A gateway that accepts every charge and never sends webhooks. Tests send them by hand. */
 export const acceptingGateway: GatewayClient = {

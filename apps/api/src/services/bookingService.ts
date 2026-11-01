@@ -1,4 +1,8 @@
 import type { Pool } from 'pg';
+import { lockSeatsInIdOrder, withTransaction } from '@seatlock/db';
+import * as bookings from '../repositories/bookingRepository';
+import { insertOutboxEvent } from '../repositories/outboxRepository';
+import * as payments from '../repositories/paymentRepository';
 import { AppError } from '../utils/errors';
 
 interface BookingViewRow {
@@ -58,6 +62,57 @@ export function createBookingService(pool: Pool) {
       );
       if (!rows[0]) throw new AppError('NOT_FOUND', 'Booking not found');
       return toView(rows[0]);
+    },
+
+    /**
+     * PRD 9.6: whole-booking cancellation before the show. One transaction, lock order
+     * booking -> payment -> seats (R3). Seats are freed, the confirmed flag cleared, and a
+     * RefundRequired event written alongside. Naturally idempotent: cancelling again
+     * returns the current state.
+     */
+    async cancel(userId: string, bookingId: string) {
+      return withTransaction(pool, async (client) => {
+        const booking = await bookings.lockBookingOfUser(client, bookingId, userId);
+        if (!booking) throw new AppError('NOT_FOUND', 'Booking not found');
+
+        const payment = await bookings.lockPaymentOfBooking(client, bookingId);
+        const refund = payment ? { paymentId: payment.id } : null;
+        if (booking.status === 'CANCELLED') {
+          return { bookingId, status: 'CANCELLED' as const, refund };
+        }
+        if (booking.status !== 'CONFIRMED') {
+          throw new AppError('INVALID_STATE', `Cannot cancel a ${booking.status} booking`);
+        }
+        const show = await bookings.findShowForHold(client, booking.show_id);
+        if (!show?.upcoming) {
+          throw new AppError('INVALID_STATE', 'The show has already started');
+        }
+
+        const seatIds = (await bookings.itemSeatsOfBooking(client, bookingId)).map((s) => s.id);
+        await lockSeatsInIdOrder(client, seatIds);
+
+        await bookings.transitionBooking(client, bookingId, 'CONFIRMED', 'CANCELLED');
+        await bookings.releaseBookedSeats(client, seatIds, bookingId);
+        await bookings.setItemsConfirmed(client, bookingId, false);
+        // A CONFIRMED booking always has a SUCCESS payment; the guard makes that explicit
+        if (
+          payment &&
+          (await payments.transitionPayment(client, payment.id, 'SUCCESS', 'REFUND_REQUIRED'))
+        ) {
+          await insertOutboxEvent(client, {
+            aggregateType: 'payment',
+            aggregateId: payment.id,
+            eventType: 'RefundRequired',
+            payload: {
+              paymentId: payment.id,
+              bookingId,
+              amount: booking.total_amount,
+              reason: 'booking_cancelled',
+            },
+          });
+        }
+        return { bookingId, status: 'CANCELLED' as const, refund };
+      });
     },
   };
 }

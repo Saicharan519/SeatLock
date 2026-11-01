@@ -1,6 +1,11 @@
 import type { Pool, PoolClient } from 'pg';
 import { z } from 'zod';
-import { lockSeatsInIdOrder, releaseHeldSeatsOfBookings, withTransaction } from '@seatlock/db';
+import {
+  lockSeatsInIdOrder,
+  releaseHeldSeatsOfBookings,
+  releaseLockedSeats,
+  withTransaction,
+} from '@seatlock/db';
 import { verifyWebhook, type Logger } from '@seatlock/shared';
 import * as bookings from '../repositories/bookingRepository';
 import { insertOutboxEvent } from '../repositories/outboxRepository';
@@ -22,27 +27,25 @@ type GatewayEvent = z.infer<typeof eventSchema>;
 
 /** What handling an event did. Returned to the caller and logged. */
 export type WebhookResult =
-  'duplicate' | 'ignored' | 'confirmed' | 'refund_required' | 'payment_failed' | 'refunded';
+  | 'duplicate'
+  | 'ignored'
+  | 'confirmed'
+  | 'confirmed_late'
+  | 'refund_required'
+  | 'payment_failed'
+  | 'refunded';
 
 export function createWebhookService(pool: Pool, webhookSecret: string, logger: Logger) {
-  /** PRD 9.3: payment success, booking still live. Lock, verify, then update. */
-  async function confirmInTime(
+  /** The shared tail of both confirmation paths. Seats are already BOOKED. */
+  async function finishConfirmation(
     client: PoolClient,
     booking: bookings.LockedBooking,
     payment: payments.PaymentRow,
     event: GatewayEvent,
-  ): Promise<boolean> {
-    const seats = await bookings.itemSeatsOfBooking(client, booking.id);
-    const seatIds = seats.map((s) => s.id);
-    await lockSeatsInIdOrder(client, seatIds);
-    // With the seats locked nothing can change them, so checking first and updating second
-    // is all-or-nothing by construction. No savepoint needed.
-    if ((await bookings.countSeatsHeldBy(client, seatIds, booking.id)) !== seatIds.length) {
-      return false;
-    }
-    await bookings.markSeatsBooked(client, seatIds, booking.id);
+    seats: { seat_label: string }[],
+  ): Promise<void> {
     await bookings.setItemsConfirmed(client, booking.id, true);
-    await bookings.transitionBooking(client, booking.id, 'PENDING', 'CONFIRMED');
+    await bookings.transitionBooking(client, booking.id, booking.status, 'CONFIRMED');
     await payments.transitionPayment(client, payment.id, 'INITIATED', 'SUCCESS', {
       providerReference: event.data.chargeId,
     });
@@ -58,7 +61,58 @@ export function createWebhookService(pool: Pool, webhookSecret: string, logger: 
         totalAmount: booking.total_amount,
       },
     });
+  }
+
+  /**
+   * PRD 9.3: payment success, booking still live. Lock, verify, then update: with the seats
+   * locked nothing can change them, so checking first and updating second is all-or-nothing
+   * by construction. No savepoint needed.
+   */
+  async function confirmInTime(
+    client: PoolClient,
+    booking: bookings.LockedBooking,
+    payment: payments.PaymentRow,
+    event: GatewayEvent,
+  ): Promise<boolean> {
+    const seats = await bookings.itemSeatsOfBooking(client, booking.id);
+    const seatIds = seats.map((s) => s.id);
+    await lockSeatsInIdOrder(client, seatIds);
+    if ((await bookings.countSeatsHeldBy(client, seatIds, booking.id)) !== seatIds.length) {
+      return false;
+    }
+    await bookings.markSeatsBooked(client, seatIds, booking.id);
+    await finishConfirmation(client, booking, payment, event, seats);
     return true;
+  }
+
+  /**
+   * PRD 9.3 late path: the hold expired before the money arrived. Try to re-claim EVERY seat
+   * at once. If all are still free (or only stale-held), confirm. If any is gone, change no
+   * seat it doesn't own, never confirm partially, and refund. Same lock-verify-update shape.
+   */
+  async function confirmLate(
+    client: PoolClient,
+    booking: bookings.LockedBooking,
+    payment: payments.PaymentRow,
+    event: GatewayEvent,
+  ): Promise<WebhookResult> {
+    const seats = await bookings.itemSeatsOfBooking(client, booking.id);
+    const seatIds = seats.map((s) => s.id);
+    await lockSeatsInIdOrder(client, seatIds);
+
+    if ((await bookings.countSeatsClaimableLate(client, seatIds, booking.id)) === seatIds.length) {
+      await bookings.bookSeats(client, seatIds, booking.id);
+      await finishConfirmation(client, booking, payment, event, seats);
+      return 'confirmed_late';
+    }
+
+    // Some seat now belongs to someone else. Give back what we still hold (guarded by
+    // booking_id, and already locked above) and owe the customer their money.
+    if (booking.status === 'PENDING') {
+      await bookings.transitionBooking(client, booking.id, 'PENDING', 'EXPIRED');
+      await releaseLockedSeats(client, [booking.id]);
+    }
+    return requireRefund(client, payment, 'INITIATED', event, 'late_payment_seats_taken');
   }
 
   /** The customer was charged but can't have the booking: record that a refund is owed. */
@@ -110,13 +164,7 @@ export function createWebhookService(pool: Pool, webhookSecret: string, logger: 
     }
 
     if (booking.status === 'PENDING' || booking.status === 'EXPIRED') {
-      // Late payment. Phase 4 takes the always-safe route: refund, never confirm.
-      // Phase 5 upgrades this to "re-claim all seats atomically, else refund" (PRD 9.3).
-      if (booking.status === 'PENDING') {
-        await bookings.transitionBooking(client, booking.id, 'PENDING', 'EXPIRED');
-        await releaseHeldSeatsOfBookings(client, [booking.id]);
-      }
-      return requireRefund(client, payment, 'INITIATED', event, 'late_payment');
+      return confirmLate(client, booking, payment, event);
     }
 
     // FAILED or CANCELLED booking: no re-claim, the money goes back

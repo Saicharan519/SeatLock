@@ -36,5 +36,9 @@ export function createBookingController(bookings: BookingService, payments: Paym
       .json(body.error ? { error: { ...body.error, requestId: req.id } } : result.body);
   };
 
-  return { listMine, get, pay };
+  const cancel: RequestHandler = async (req, res) => {
+    res.json(await bookings.cancel(currentUser(req).id, parseBookingId(req)));
+  };
+
+  return { listMine, get, pay, cancel };
 }
