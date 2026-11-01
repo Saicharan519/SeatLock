@@ -8,6 +8,8 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    # A hung test must fail fast instead of running to GitHub's 6-hour default
+    timeout-minutes: 15
 
     services:
       postgres:

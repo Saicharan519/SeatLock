@@ -249,25 +249,25 @@ describe('outbox processing (FR-13, FR-14)', () => {
       const root = path.resolve(__dirname, '../..');
 
       // A real separate OS process running the outbox, which dies after the side effect
+      // `node --import tsx`, NOT the `tsx` CLI: the CLI is a launcher that runs the script in
+      // a second process, so SIGKILL would hit the launcher and orphan the real worker.
       child = spawn(
         process.execPath,
-        [
-          path.join(root, 'node_modules/tsx/dist/cli.mjs'),
-          path.join(root, 'tests/fixtures/crashingWorker.ts'),
-        ],
+        ['--import', 'tsx', path.join(root, 'tests/fixtures/crashingWorker.ts')],
         { cwd: root, env: process.env, stdio: ['ignore', 'pipe', 'pipe'] },
       );
+      let giveUp: NodeJS.Timeout | undefined;
       await new Promise<void>((resolve, reject) => {
         child!.stdout!.on(
           'data',
           (d: Buffer) => d.toString().includes('SIDE_EFFECT_DONE') && resolve(),
         );
         child!.on('exit', (code) => reject(new Error(`crashing worker exited early (${code})`)));
-        setTimeout(
+        giveUp = setTimeout(
           () => reject(new Error('crashing worker never reached the side effect')),
           20_000,
         );
-      });
+      }).finally(() => clearTimeout(giveUp)); // a pending timer would keep Jest alive
 
       // Side effect done, result never recorded
       expect(await notifications()).toHaveLength(1);
@@ -275,9 +275,12 @@ describe('outbox processing (FR-13, FR-14)', () => {
 
       // Kill it: no cleanup, no graceful shutdown
       const exited = new Promise((resolve) => child!.once('exit', resolve));
+      const workerPid = child.pid!;
       child.kill('SIGKILL');
       await exited;
       child = undefined;
+      // The process that did the side effect is really gone (signal 0 only checks existence)
+      expect(() => process.kill(workerPid, 0)).toThrow();
 
       // Still PROCESSING, owned by a dead worker. A healthy worker can't take it until the lease expires.
       expect(await processOutbox(pool, outboxOptions(realConsumers()))).toBe(0);
