@@ -118,16 +118,94 @@ export async function insertBookingItems(
   );
 }
 
+export interface LockedBooking {
+  id: string;
+  user_id: string;
+  show_id: string;
+  status: BookingStatus;
+  total_amount: number;
+  /** expires_at > now(), by the database clock (R5) */
+  live: boolean;
+}
+
+const LOCKED_BOOKING_COLUMNS = `id, user_id, show_id, status, total_amount, expires_at > now() AS live`;
+
+/** Locks a booking (first in the R3 lock order). */
+export async function lockBooking(
+  client: PoolClient,
+  bookingId: string,
+): Promise<LockedBooking | undefined> {
+  const { rows } = await client.query<LockedBooking>(
+    `SELECT ${LOCKED_BOOKING_COLUMNS} FROM bookings WHERE id = $1 FOR UPDATE`,
+    [bookingId],
+  );
+  return rows[0];
+}
+
+/** Locks a booking only if it belongs to the user. Someone else's booking looks like no booking. */
 export async function lockBookingOfUser(
   client: PoolClient,
   bookingId: string,
   userId: string,
-): Promise<{ id: string; status: BookingStatus } | undefined> {
-  const { rows } = await client.query<{ id: string; status: BookingStatus }>(
-    `SELECT id, status FROM bookings WHERE id = $1 AND user_id = $2 FOR UPDATE`,
+): Promise<LockedBooking | undefined> {
+  const { rows } = await client.query<LockedBooking>(
+    `SELECT ${LOCKED_BOOKING_COLUMNS} FROM bookings WHERE id = $1 AND user_id = $2 FOR UPDATE`,
     [bookingId, userId],
   );
   return rows[0];
+}
+
+/** The booking's seats as recorded in booking_items, ascending id. */
+export async function itemSeatsOfBooking(
+  client: PoolClient,
+  bookingId: string,
+): Promise<{ id: string; seat_label: string }[]> {
+  const { rows } = await client.query<{ id: string; seat_label: string }>(
+    `SELECT s.id, s.seat_label FROM booking_items i JOIN seats s ON s.id = i.seat_id
+     WHERE i.booking_id = $1 ORDER BY s.id`,
+    [bookingId],
+  );
+  return rows;
+}
+
+/** How many of these seats this booking still holds. Call with the seats locked. */
+export async function countSeatsHeldBy(
+  client: PoolClient,
+  seatIds: string[],
+  bookingId: string,
+): Promise<number> {
+  const { rows } = await client.query<{ n: number }>(
+    `SELECT count(*)::int AS n FROM seats
+     WHERE id = ANY($1::bigint[]) AND booking_id = $2 AND status = 'HELD'`,
+    [seatIds, bookingId],
+  );
+  return rows[0]!.n;
+}
+
+/** HELD -> BOOKED for seats this booking holds. Returns the number changed. */
+export async function markSeatsBooked(
+  client: PoolClient,
+  seatIds: string[],
+  bookingId: string,
+): Promise<number> {
+  const { rowCount } = await client.query(
+    `UPDATE seats SET status = 'BOOKED', updated_at = now()
+     WHERE id = ANY($1::bigint[]) AND booking_id = $2 AND status = 'HELD'`,
+    [seatIds, bookingId],
+  );
+  return rowCount ?? 0;
+}
+
+/** Sets is_confirmed, the column the one_confirmed_per_seat index enforces. */
+export async function setItemsConfirmed(
+  client: PoolClient,
+  bookingId: string,
+  confirmed: boolean,
+): Promise<void> {
+  await client.query(`UPDATE booking_items SET is_confirmed = $2 WHERE booking_id = $1`, [
+    bookingId,
+    confirmed,
+  ]);
 }
 
 /** Payment for a booking, locked (payment is second in the R3 lock order). */

@@ -18,6 +18,18 @@ const TABLES = [
   'users',
 ];
 
+/**
+ * Empties every table. In end-to-end tests a webhook from the previous test can still be
+ * in flight; if TRUNCATE collides with it, Postgres reports a deadlock and we retry.
+ */
 export async function resetDatabase(pool: Pool): Promise<void> {
-  await pool.query(`TRUNCATE ${TABLES.join(', ')} RESTART IDENTITY CASCADE`);
+  for (let attempt = 1; ; attempt++) {
+    try {
+      await pool.query(`TRUNCATE ${TABLES.join(', ')} RESTART IDENTITY CASCADE`);
+      return;
+    } catch (err) {
+      if ((err as { code?: string }).code !== '40P01' || attempt >= 5) throw err;
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+  }
 }
