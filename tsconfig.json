@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "target": "ES2023",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "isolatedModules": true,
+    "lib": ["ES2023"],
+    "types": ["node", "jest"],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "noEmit": true,
+    "paths": {
+      "@seatlock/db": ["./packages/db/src/index.ts"],
+      "@seatlock/shared": ["./packages/shared/src/index.ts"]
+    }
+  },
+  "include": ["apps/*/src", "packages/*/src", "tests"],
+  "exclude": ["node_modules", "frontend", "tests/k6"]
+}
