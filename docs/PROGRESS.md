@@ -1,6 +1,6 @@
 # SeatLock progress
 
-Last updated: 2026-11-01, after Phase 7.
+Last updated: 2026-11-01, after Phase 8.
 
 ## Phases
 
@@ -14,8 +14,8 @@ Last updated: 2026-11-01, after Phase 7.
 | 5 Failure and edge paths      | Done        | `afa4a23`                | [passed](https://github.com/Saicharan519/SeatLock/actions/runs/41318197495)                                                | 69          | [phase-5](phases/phase-5-failure-paths.md)    |
 | 6 Outbox and consumers        | Done        | `b343ed3`, fix `959b59f` | [passed](https://github.com/Saicharan519/SeatLock/actions/runs/41327978843) (52 s; the first run took 640 s, see write-up) | 82          | [phase-6](phases/phase-6-outbox.md)           |
 | 7 Hardening and observability | Done        | `0115410`                | [passed](https://github.com/Saicharan519/SeatLock/actions/runs/41332550345) (1 min 46 s, now with a Redis service)         | 101         | [phase-7](phases/phase-7-hardening.md)        |
-| 8 Performance proof (k6)      | **Next**    |                          |                                                                                                                            |             |                                               |
-| 9 Frontend                    | Not started |                          |                                                                                                                            |             |                                               |
+| 8 Performance proof (k6)      | Done        | `5f2a26b`                | [passed](https://github.com/Saicharan519/SeatLock/actions/runs/41335794582) (1 min 4 s)                                    | 103         | [phase-8](phases/phase-8-performance.md)      |
+| 9 Frontend                    | **Next**    |                          |                                                                                                                            |             |                                               |
 | 10 Polish and delivery        | Not started |                          |                                                                                                                            |             |                                               |
 
 **All P0 functional requirements are now implemented** (PRD milestone "P0 complete").
@@ -24,7 +24,7 @@ Last updated: 2026-11-01, after Phase 7.
 
 | Test | What it proves                                                                                     | Status                                                                                                     | Where                                                                                                          |
 | ---- | -------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| T1   | 1,000 users race for 50 seats: exactly 50 win, 950 `SEAT_UNAVAILABLE`, zero 503s                   | Pass                                                                                                       | [concurrency.test.ts](../tests/integration/concurrency.test.ts)                                                |
+| T1   | 1,000 users race for 50 seats: exactly 50 win, 950 `SEAT_UNAVAILABLE`, zero 503s                   | Pass (since Phase 8, same-seat requests genuinely contend)                                                 | [concurrency.test.ts](../tests/integration/concurrency.test.ts)                                                |
 | T2   | 200 random overlapping multi-seat holds: no partial or shared seats, zero deadlocks                | Pass                                                                                                       | [concurrency.test.ts](../tests/integration/concurrency.test.ts)                                                |
 | T3   | Same idempotency key ×20 concurrently: one booking (hold) and one payment + one gateway call (pay) | Pass                                                                                                       | [holds.test.ts](../tests/integration/holds.test.ts), [payments.test.ts](../tests/integration/payments.test.ts) |
 | T4   | Same key, different body → 422                                                                     | Pass                                                                                                       | [holds.test.ts](../tests/integration/holds.test.ts)                                                            |
@@ -63,30 +63,41 @@ Last updated: 2026-11-01, after Phase 7.
 
 **All 10 scenarios pass.**
 
-## Test inventory (101 tests, 17 files)
+## Test inventory (103 tests, 18 files)
 
-| File                  | Tests | Covers                                                           |
-| --------------------- | ----- | ---------------------------------------------------------------- |
-| schema.test.ts        | 6     | DB constraints, T15                                              |
-| health.test.ts        | 4     | Health check (ok / degraded / disabled), error shape             |
-| auth.test.ts          | 5     | Register, login, JWT, timing-safe login                          |
-| shows.test.ts         | 7     | Shows, seat map read-time check, admin create                    |
-| holds.test.ts         | 11    | Holds, validation, idempotency (T3, T4), release                 |
-| concurrency.test.ts   | 2     | T1, T2                                                           |
-| expiry.test.ts        | 3     | T5, T19, two concurrent workers                                  |
-| payments.test.ts      | 8     | End to end: S1, S8, T3 (pay), T7, T18                            |
-| webhooks.test.ts      | 10    | T6, T10, decision table                                          |
-| latePayment.test.ts   | 8     | T8, T9, T14                                                      |
-| cancellation.test.ts  | 4     | S9 (cancel), T16                                                 |
-| sweeps.test.ts        | 3     | T17, payment sweep, key cleanup                                  |
-| outbox.test.ts        | 10    | S5, T11, T12, retries, backoff, timeouts, fencing, poison events |
-| refunds.test.ts       | 3     | S9 end to end, late-payment refund, refund idempotency           |
-| rateLimit.test.ts     | 8     | FR-18 limits, atomic counting, T13 (three Redis failure shapes)  |
-| admin.test.ts         | 5     | FR-19 outbox inspection and retry                                |
-| transitionLog.test.ts | 4     | Transition logging after commit only, afterCommit semantics      |
+| File                  | Tests | Covers                                                                                    |
+| --------------------- | ----- | ----------------------------------------------------------------------------------------- |
+| schema.test.ts        | 6     | DB constraints, T15                                                                       |
+| health.test.ts        | 4     | Health check (ok / degraded / disabled), error shape                                      |
+| auth.test.ts          | 5     | Register, login, JWT, timing-safe login                                                   |
+| shows.test.ts         | 7     | Shows, seat map read-time check, admin create                                             |
+| holds.test.ts         | 11    | Holds, validation, idempotency (T3, T4), release                                          |
+| concurrency.test.ts   | 2     | T1, T2                                                                                    |
+| expiry.test.ts        | 3     | T5, T19, two concurrent workers                                                           |
+| payments.test.ts      | 8     | End to end: S1, S8, T3 (pay), T7, T18                                                     |
+| webhooks.test.ts      | 10    | T6, T10, decision table                                                                   |
+| latePayment.test.ts   | 8     | T8, T9, T14                                                                               |
+| cancellation.test.ts  | 4     | S9 (cancel), T16                                                                          |
+| sweeps.test.ts        | 3     | T17, payment sweep, key cleanup                                                           |
+| outbox.test.ts        | 10    | S5, T11, T12, retries, backoff, timeouts, fencing, poison events                          |
+| refunds.test.ts       | 3     | S9 end to end, late-payment refund, refund idempotency                                    |
+| rateLimit.test.ts     | 8     | FR-18 limits, atomic counting, T13 (three Redis failure shapes)                           |
+| admin.test.ts         | 5     | FR-19 outbox inspection and retry                                                         |
+| transitionLog.test.ts | 4     | Transition logging after commit only, afterCommit semantics                               |
+| naiveRace.test.ts     | 2     | Naive read-then-write oversells; database blocks double confirmation; SeatLock exactly 50 |
+
+## Performance (Phase 8)
+
+| Measure                      | Result                                                                             |
+| ---------------------------- | ---------------------------------------------------------------------------------- |
+| G7 p95 seat map < 300 ms     | **Met**: 46–62 ms (50 VUs, 60 s, 1,046–1,263 req/s)                                |
+| G7 p95 hold < 500 ms         | **Met**: 117–164 ms                                                                |
+| Spike: 1,000 users, 50 seats | Always 50 × 201 / 950 × 409, 0 failures, 0 deadlocks; drains in 2.8–4.1 s          |
+| Naive vs SeatLock            | Naive tells 524–785 customers they hold one of 50 seats; SeatLock tells exactly 50 |
+
+Details: [results.md](results.md).
 
 ## Remaining work
 
-- **Phase 8:** k6 scenarios A and B, naive-vs-fixed demo.
 - **Phase 9:** React UI (max 3 days).
 - **Phase 10:** full README, diagrams, Docker Compose for all services, demo recording.

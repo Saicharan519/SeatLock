@@ -122,6 +122,23 @@ Made before coding, after two independent reviews of the PRD.
 | G11 | Rate-limit tests use **Redis database 1**, flushed per test; CI gets a Redis service                    | Sharing database 0                   | Tests never touch dev data                                                                                                                |
 | G12 | The health test uses a **stub** for "Redis down"; real unreachable clients only mid-file in T13         | A real unreachable client everywhere | ioredis keeps the process alive ~2.3 s after a refused connection (measured), which delays Jest's exit if it happens at the end of a file |
 
+## H. Performance testing (Phase 8)
+
+| #   | Decision                                                                               | Rejected                                          | Why                                                                                                                                 |
+| --- | -------------------------------------------------------------------------------------- | ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| H1  | **k6 from the `grafana/k6` Docker image**                                              | Installing k6 on the host                         | Reproducible, nothing to install, same version everywhere                                                                           |
+| H2  | **API, k6 and Postgres on one Docker network** for load tests                          | API on Windows, k6 calling `localhost`            | Keeps the Windows network stack (and its ~200-deep accept queue) out of the measurement                                             |
+| H3  | A dedicated **`seatlock_load` database**, reset before each run                        | Reusing dev or test data                          | Runs are repeatable and never touch other data                                                                                      |
+| H4  | **1,000 JWTs pre-generated** by a setup script                                         | Logging in during the test                        | PRD 13; keeps bcrypt and login out of the hold measurement                                                                          |
+| H5  | **Rate limiting disabled** for load runs, and stated in the results                    | Leaving it on                                     | Otherwise the limiter's 429s would be measured instead of the system                                                                |
+| H6  | k6 treats **201 and 409 as expected** responses                                        | k6's default (every 4xx is a failure)             | 409 SEAT_UNAVAILABLE is the correct answer for 950 of 1,000 spike users; "failed" should mean real failures                         |
+| H7  | Scenario B has **no think time**                                                       | Simulated user pauses                             | Worst case for latency; targets met anyway                                                                                          |
+| H8  | Spike latency **reported, not asserted**; drain time and throughput reported alongside | Percentiles only                                  | In a simultaneous spike, latency is mostly queueing; drain time explains it                                                         |
+| H9  | **No performance changes** made                                                        | Micro-optimising the hold path                    | G7 targets met with large headroom; the spike's limit is one Node process's CPU, addressed by running more instances, not by tuning |
+| H10 | **Same-seat requests fired together** (`contendedOrder`) in T1, the spike and the demo | Plain order _i_                                   | With a 20-connection pool, plain order never overlapped two requests for one seat, so the race wasn't really tested                 |
+| H11 | The **deliberately broken naive hold lives in `demo/`**, never in `apps/`              | No demo, or a flag in the real API                | Shows the bug and proves the tests can fail, without any risk of shipping it                                                        |
+| H12 | Linux verification runs **on the compose network**                                     | Reaching databases through `host.docker.internal` | That forwarding path occasionally dropped new connections under bursts                                                              |
+
 ## Known limitations (documented, not bugs)
 
 - **Crash between the pay commit and the gateway call:** the payment stays INITIATED and the gateway never sees it. A same-key retry replays the 202 without calling the gateway. The hold expires, and the sweep fails the payment after 15 minutes.
@@ -138,3 +155,6 @@ Made before coding, after two independent reviews of the PRD.
 - **FAILED outbox events** need a human to fix the cause, then retry them through the admin endpoint.
 - **The mock gateway keeps state in memory.** If it restarts, refunds for charges made before the restart fail (unknown payment) and end up FAILED after retries.
 - **Local test environment:** on desktop Windows, tests that open hundreds of simultaneous connections need the client socket pool (E4). Linux CI doesn't.
+- **One API process tops out at one CPU core.** Under the spike it drained ~250–350 holds per second; more throughput needs more API instances. Correctness doesn't depend on it.
+- **Load numbers come from one laptop**, with every container sharing a Docker Desktop VM; run-to-run variance was noticeable (spike p95 2.1–3.0 s). Not a production benchmark.
+- **The API runs through `tsx`**, not compiled JavaScript. Only startup differs; it isn't expected to change the steady-state numbers, but it wasn't measured separately.

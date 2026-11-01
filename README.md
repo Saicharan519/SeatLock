@@ -8,18 +8,30 @@ PostgreSQL enforces it with row locks, guarded updates and constraints, not just
 
 [![CI](https://github.com/Saicharan519/SeatLock/actions/workflows/ci.yml/badge.svg)](https://github.com/Saicharan519/SeatLock/actions/workflows/ci.yml)
 
-> **Status:** work in progress, Phases 0–7 of 10 complete; all 19 PRD acceptance tests pass. Next: load testing. See [docs/PROGRESS.md](docs/PROGRESS.md).
+> **Status:** backend complete (Phases 0–8 of 10): all 19 PRD acceptance tests pass and the latency targets are met. Next: a minimal UI. See [docs/PROGRESS.md](docs/PROGRESS.md).
+
+## The bug it prevents
+
+The obvious way to hold a seat is "check it's free, then mark it taken". Raced by 1,000 users for 50 seats ([`npm run demo:race`](demo/race)):
+
+| Implementation        | Customers told "you hold the seat" | Seats that exist |
+| --------------------- | ---------------------------------- | ---------------- |
+| Naive read-then-write | **524–785**                        | 50               |
+| SeatLock              | **50**                             | 50               |
+
+Even the naive version can't actually sell a seat twice here: when it tries to confirm, the database's partial unique index rejects every second confirmation.
 
 ## What's proven so far
 
-- **1,000 concurrent holds on 50 seats → exactly 50 succeed**, 950 get a clean `409 SEAT_UNAVAILABLE`, zero errors (T1)
+- **1,000 concurrent holds on 50 seats → exactly 50 succeed**, 950 get a clean `409 SEAT_UNAVAILABLE`, zero errors, with same-seat requests genuinely racing (T1, and the k6 spike)
+- **Latency targets met** (50 users, 60 s, ~1,000–1,260 req/s): p95 seat map **46–62 ms** (target 300), p95 hold **117–164 ms** (target 500)
 - **200 random overlapping multi-seat holds → zero deadlocks**, by Postgres's own counter (T2)
 - **The same request sent 20 times at once → one payment and one gateway call** (idempotency keys)
 - **Payment-gateway timeouts never fail a booking**; signed webhooks decide, duplicates are no-ops
 - **Late payments re-claim all seats or refund**, never partially confirm
 - **A worker killed mid-task loses nothing**: its lease expires, another worker re-delivers the event, and the customer still gets exactly one notification (transactional outbox, at-least-once delivery, idempotent consumers)
 - **Redis going down doesn't take the API down**: rate limiting fails open without blocking requests, and resumes when Redis returns (verified by stopping the real Redis container)
-- 101 integration tests against a real PostgreSQL and Redis, green in CI
+- 103 integration tests against a real PostgreSQL and Redis, green in CI
 
 Measured numbers and machine specs: [docs/results.md](docs/results.md).
 
@@ -70,6 +82,14 @@ Run the tests (uses a separate `seatlock_test` database):
 
 ```bash
 npm test
+```
+
+The race demo, and the k6 load tests (k6 and the API run in Docker; needs a `seatlock_load` database, see [docs/results.md](docs/results.md)):
+
+```bash
+npm run demo:race
+npm run loadtest:spike
+npm run loadtest:steady
 ```
 
 ## API overview
