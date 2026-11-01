@@ -8,7 +8,7 @@ PostgreSQL enforces it with row locks, guarded updates and constraints, not just
 
 [![CI](https://github.com/Saicharan519/SeatLock/actions/workflows/ci.yml/badge.svg)](https://github.com/Saicharan519/SeatLock/actions/workflows/ci.yml)
 
-> **Status:** work in progress, Phases 0–5 of 10 complete. See [docs/PROGRESS.md](docs/PROGRESS.md).
+> **Status:** work in progress, Phases 0–6 of 10 complete; all core booking, payment and recovery logic is done. See [docs/PROGRESS.md](docs/PROGRESS.md).
 
 ## What's proven so far
 
@@ -17,7 +17,8 @@ PostgreSQL enforces it with row locks, guarded updates and constraints, not just
 - **The same request sent 20 times at once → one payment and one gateway call** (idempotency keys)
 - **Payment-gateway timeouts never fail a booking**; signed webhooks decide, duplicates are no-ops
 - **Late payments re-claim all seats or refund**, never partially confirm
-- 69 integration tests against a real PostgreSQL, green in CI
+- **A worker killed mid-task loses nothing**: its lease expires, another worker re-delivers the event, and the customer still gets exactly one notification (transactional outbox, at-least-once delivery, idempotent consumers)
+- 82 integration tests against a real PostgreSQL, green in CI
 
 Measured numbers and machine specs: [docs/results.md](docs/results.md).
 
@@ -29,10 +30,11 @@ Client ──REST──▶ API (Express, TS) ──SQL──▶ PostgreSQL (sour
                    │      │ signed webhook       │ FOR UPDATE SKIP LOCKED
                    ▼      │                      │
            Mock payment gateway          Worker (separate process)
+                                           • deliver outbox events (leases):
+                                             notifications, gateway refunds
                                            • expire abandoned holds
                                            • fail payments with no webhook
                                            • clean up idempotency keys
-                                           • (Phase 6) deliver outbox events
 ```
 
 - **Three processes, one repo:** `apps/api`, `apps/worker`, `apps/mock-gateway`; shared code in `packages/db` and `packages/shared`.
