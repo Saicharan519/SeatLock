@@ -92,8 +92,8 @@ Every connection has `statement_timeout = 5s` and `lock_timeout = 3s` (R6), so n
 - The `npm audit` warning is in a dependency of the migration tool, which never runs inside the API. It's accepted, not ignored.
 - The project lives in OneDrive. OneDrive may try to sync `node_modules` (thousands of files). Exclude it, or move the project.
 
-## Interview talking points
+## Key takeaways
 
-- "The database enforces the invariant, not just the code": point to `one_confirmed_per_seat`, and T15, which inserts bad data directly and shows Postgres rejecting it.
-- Why integer paise, why `timestamptz`, why no ORM.
-- Why login has constant timing and identical errors.
+- The database enforces the core invariant, not just the code: `one_confirmed_per_seat` rejects a second confirmed booking for a seat, and T15 proves it by inserting bad rows directly.
+- Money is integer paise and time is `timestamptz`, which avoids rounding and time-zone bugs. Raw SQL keeps locks and atomic updates visible.
+- Login returns the same error in the same time for a wrong password and an unknown email, so registered emails can't be discovered.

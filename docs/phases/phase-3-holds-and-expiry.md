@@ -114,11 +114,11 @@ Two test failures taught real lessons:
 
 36 tests in total, all passing.
 
-## Interview talking points
+## Key takeaways
 
-- Walk through the read-then-write race, then the conditional `UPDATE` plus row count that fixes it.
-- Why lock in id order: draw the two-transaction deadlock cycle.
-- "Correctness comes from row locks and guarded updates at READ COMMITTED, not from SERIALIZABLE isolation." Higher isolation would also work, but it fails transactions and makes you retry them; here the locks make the outcome deterministic.
-- Idempotency keys and how the unique index serializes concurrent duplicates.
-- `SKIP LOCKED` for safe parallel workers.
-- The "100 winners" story: a test failure that turned out to be correct behaviour, and how you diagnosed it.
+- The read-then-write race is closed by a conditional `UPDATE` whose row count must equal the seats requested.
+- Locking seats in ascending id order makes the two-transaction deadlock cycle impossible.
+- Correctness comes from row locks and guarded updates at READ COMMITTED, not from SERIALIZABLE isolation. Higher isolation would also be correct, but it aborts conflicting transactions that then need retrying; the locks make the outcome deterministic.
+- Idempotency keys rely on the unique index to serialize concurrent duplicates.
+- `SKIP LOCKED` lets several workers run safely in parallel.
+- The "100 winners" result was a test failure that turned out to be correct behaviour (stale-hold takeover), not a double-booking.

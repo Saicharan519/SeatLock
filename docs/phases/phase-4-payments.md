@@ -109,11 +109,11 @@ Phase 4 also already covers two items planned for Phase 5, because they're part 
 | **T18**           | Gateway timeout → 202 with nothing changed → webhook confirms                                                                                                           |
 | +                 | Refunds for success-after-failure and after cancellation, refund webhook, unknown payment, amount mismatch, malformed payload, pay refusals, key reuse across endpoints |
 
-## Interview talking points
+## Key takeaways
 
-- Why "202 + webhook" and not a synchronous answer.
-- **The ambiguous-timeout argument**: why a timeout must not fail the booking (T18). This is a favourite senior-level question.
-- R7, no HTTP inside transactions: lock duration, and duplicate side effects on retry.
-- HMAC webhook verification: raw body, constant-time compare, timestamp against replays.
-- At-least-once delivery means dedupe by event id, in the same transaction as the effect.
-- Transactional outbox vs "send after commit" (the crash window).
+- Payment is "202 + webhook" because real gateways confirm asynchronously.
+- A gateway timeout must not fail the booking: the charge may have gone through. Only a 4xx is a definite failure (T18).
+- No HTTP calls inside transactions (R7): they would hold row locks for the call's duration, and a retried transaction would repeat the call.
+- Webhooks are verified with HMAC over the raw body, a constant-time compare, and a timestamp check against replays.
+- At-least-once delivery is handled by deduplicating on the event id, in the same transaction as the effect.
+- The transactional outbox closes the crash window that "send after commit" leaves open.

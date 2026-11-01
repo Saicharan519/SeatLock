@@ -70,7 +70,7 @@ In measured runs both outcomes occur (about 2 and 18 out of 20), so both branche
 
 "Forced interleaving" means making a specific ordering happen on purpose with locks, rather than hoping a random run hits it. Pausing one transaction while holding a lock is the standard technique.
 
-## What happened during this phase (good interview stories)
+## What happened during this phase
 
 1. **The race test found a 500.** Under the three-way race the webhook sometimes returned `500`. Debug logging (a new `TEST_LOG_LEVEL` switch for tests) showed `duplicate key violates unique constraint "payments_provider_ref_unique"`. The cause was **test data**: every hand-made event used the same charge id `ch_123`, so the second payment to record it hit the constraint. Real gateways issue a unique charge id per charge, so test events now derive the charge id from the payment id. The constraint itself did its job: one gateway charge can never be attached to two payments.
 2. **SQL's three-valued logic.** A test computed "is this seat mine?" as `booking_id = my_id`. For a free seat `booking_id` is NULL, and `NULL = x` is **NULL**, not false. Fixed with `IS NOT DISTINCT FROM`, which treats NULL as a comparable value. A classic SQL gotcha.
@@ -89,11 +89,11 @@ In measured runs both outcomes occur (about 2 and 18 out of 20), so both branche
 | **T17** | Swept-to-FAILED payment that later succeeds → REFUND_REQUIRED, booking and seats untouched                                                          |
 | +       | The sweep only touches payments INITIATED > 15 min; idempotency-key cleanup; cancel rules (owner, CONFIRMED only, before the show)                  |
 
-## Interview talking points
+## Key takeaways
 
-- The late-payment policy: re-claim all or refund; never steal, never partial, never ignore money.
-- Why the stuck-payment sweep is safe even if the customer was charged (FAILED + success → refund).
-- Forced interleaving: how to _prove_ a race is handled (pause a transaction holding a lock, check `pg_stat_activity`), not just hope.
+- Late-payment policy: re-claim all seats or refund. Never steal, never confirm partially, never ignore money.
+- The stuck-payment sweep is safe even if the customer was charged, because a success webhook for a FAILED payment becomes a refund.
+- Forced interleaving proves a race is handled: pause a transaction holding a lock and confirm through `pg_stat_activity` that the other side is waiting.
 - `SKIP LOCKED` lets the worker step around in-flight work instead of queueing behind it.
-- Why cancellation clears `is_confirmed` rather than deleting rows: history kept, invariant enforced.
-- The NULL comparison gotcha, and the charge-id story (a test failure caused by unrealistic test data, caught by a constraint).
+- Cancellation clears `is_confirmed` instead of deleting rows, which keeps the history and still enforces the invariant.
+- `NULL = x` is NULL, not false; `IS NOT DISTINCT FROM` compares NULLs safely. Unrealistic test data (a repeated charge id) caused a false failure that a constraint correctly caught.
