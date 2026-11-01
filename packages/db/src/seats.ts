@@ -11,6 +11,22 @@ export function seatLabels(): string[] {
 }
 
 /**
+ * The order to fire T1-style requests in, so that same-seat requests really overlap.
+ * User i still wants seat i mod 50 (PRD T1), but the users who share a seat are fired
+ * together: i = 0, 50, 100, ... (all want A1), then 1, 51, 101, ... (A2), and so on.
+ *
+ * Firing in plain order i spaces same-seat users 50 apart, while a pool of 20 connections
+ * runs at most 20 at a time, so two requests for one seat would never actually overlap.
+ */
+export function contendedOrder(users: number, seats = SEAT_ROWS.length * SEATS_PER_ROW): number[] {
+  const order: number[] = [];
+  for (let seat = 0; seat < seats; seat++) {
+    for (let i = seat; i < users; i += seats) order.push(i);
+  }
+  return order;
+}
+
+/**
  * Generates a show's 50 seats. Must run in the same transaction that creates the show,
  * so a show never exists without its seats.
  */

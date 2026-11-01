@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { Agent, type Server } from 'node:http';
 import request from 'supertest';
 import type { Pool } from 'pg';
-import { seatLabels } from '@seatlock/db';
+import { contendedOrder, seatLabels } from '@seatlock/db';
 import { startTestServer, stopServer } from '../helpers/app';
 import { createTestPool, resetDatabase } from '../helpers/db';
 import { createShow, createUsers } from '../helpers/factories';
@@ -54,8 +54,11 @@ describe('hold concurrency', () => {
     const users = await createUsers(pool, 1000);
     const labels = seatLabels();
 
+    // User i wants seat i mod 50, fired grouped by seat so same-seat requests truly overlap.
+    // (Fired in plain order i, same-seat users sit 50 apart in a queue that runs 20 at a
+    // time, so they would never contend. The naive-vs-fixed demo exposed this.)
     const responses = await Promise.all(
-      users.map((u, i) => hold(u.token, showId, [labels[i % 50]!])),
+      contendedOrder(1000).map((i) => hold(users[i]!.token, showId, [labels[i % 50]!])),
     );
 
     const outcomes: Record<string, number> = {};

@@ -3,6 +3,7 @@ export { withTransaction, afterCommit, isRetryable, RetryExhaustedError } from '
 export {
   insertSeatsForShow,
   seatLabels,
+  contendedOrder,
   SEAT_ROWS,
   SEATS_PER_ROW,
   lockSeatsInIdOrder,

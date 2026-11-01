@@ -21,7 +21,10 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "test": "jest --runInBand"
+    "test": "jest --runInBand",
+    "demo:race": "tsx demo/race/run.ts",
+    "loadtest:spike": "bash tests/k6/run.sh spike",
+    "loadtest:steady": "bash tests/k6/run.sh steady"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

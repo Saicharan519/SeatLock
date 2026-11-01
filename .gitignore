@@ -4,6 +4,7 @@ coverage/
 .env
 *.log
 tests/k6/results/
+tests/k6/data/
 
 # Personal interview prep, kept local only
 docs/interview-notes.md

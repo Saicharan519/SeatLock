@@ -19,6 +19,6 @@
       "@seatlock/shared": ["./packages/shared/src/index.ts"]
     }
   },
-  "include": ["apps/*/src", "packages/*/src", "tests"],
+  "include": ["apps/*/src", "packages/*/src", "tests", "demo"],
   "exclude": ["node_modules", "frontend", "tests/k6"]
 }
