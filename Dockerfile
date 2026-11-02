@@ -1,4 +1,4 @@
-# One image for the API, the worker, the mock gateway and the migrate/seed job.
+# One image (seatlock-app) for the API, the worker, the mock gateway and the migrate/seed job.
 # docker-compose.yml picks the program with `command`.
 
 # Build: bundle each entry point with esbuild. The @seatlock/* path aliases are inlined;

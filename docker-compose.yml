@@ -45,6 +45,7 @@ services:
   # One-shot job: apply migrations, then seed the admin user and a sample show. Both are
   # idempotent, so it is safe on every `up`. The API and worker start only after it succeeds.
   migrate:
+    image: seatlock-app
     build: .
     command:
       [
@@ -62,6 +63,7 @@ services:
     restart: 'no'
 
   api:
+    image: seatlock-app
     build: .
     command: ['node', 'dist/api.js']
     environment:
@@ -84,6 +86,7 @@ services:
     restart: unless-stopped
 
   worker:
+    image: seatlock-app
     build: .
     command: ['node', 'dist/worker.js']
     environment:
@@ -95,6 +98,7 @@ services:
     restart: unless-stopped
 
   gateway:
+    image: seatlock-app
     build: .
     command: ['node', 'dist/gateway.js']
     environment:
