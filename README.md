@@ -8,7 +8,11 @@ PostgreSQL enforces it with row locks, guarded updates and constraints, not just
 
 [![CI](https://github.com/Saicharan519/SeatLock/actions/workflows/ci.yml/badge.svg)](https://github.com/Saicharan519/SeatLock/actions/workflows/ci.yml)
 
-> **Status:** backend complete (Phases 0–8 of 10): all 19 PRD acceptance tests pass and the latency targets are met. Next: a minimal UI. See [docs/PROGRESS.md](docs/PROGRESS.md).
+> **Status:** Phases 0–9 of 10 complete: backend, load tests and a minimal UI. All 19 PRD acceptance tests pass and the latency targets are met. Next: one-command Docker setup and final polish. See [docs/PROGRESS.md](docs/PROGRESS.md).
+
+| Live seat map: hatched seats are held by someone else | Checkout: the hold's countdown comes from the server |
+| ----------------------------------------------------- | ---------------------------------------------------- |
+| ![Seat map](docs/screenshots/seat-map.jpg)            | ![Checkout](docs/screenshots/checkout.jpg)           |
 
 ## The bug it prevents
 
@@ -56,7 +60,8 @@ Client ──REST──▶ API (Express, TS) ──SQL──▶ PostgreSQL (sour
 
 ## Stack
 
-Node.js 24 · TypeScript · Express 5 · PostgreSQL 16 · Redis · Zod · pino · Jest + Supertest · GitHub Actions
+Node.js 24 · TypeScript · Express 5 · PostgreSQL 16 · Redis · Zod · pino · Jest + Supertest · k6 · GitHub Actions
+UI: React 19 · Vite · Tailwind CSS
 
 ## Running it locally
 
@@ -76,6 +81,12 @@ In three terminals:
 npm run dev:api               # http://localhost:3000
 npm run dev:gateway           # mock payment gateway on :4000
 npm run dev:worker
+```
+
+And the UI at http://localhost:5173 (it proxies `/api` to the API):
+
+```bash
+cd frontend && npm ci && npm run dev
 ```
 
 Run the tests (uses a separate `seatlock_test` database):

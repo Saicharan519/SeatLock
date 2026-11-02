@@ -18,12 +18,12 @@ Measured numbers only. Every figure says where and when it was measured. Per the
 
 Measured 2026-11-01 after Phase 8, on the machine above.
 
-| Measure                | Result                                                                                                                                                                                                                                                      |
-| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Tests                  | **103 passed / 103** (18 files)                                                                                                                                                                                                                             |
-| Full suite wall time   | 106 s on Windows (the naive race demo test adds ~25 s); 111 s in a Linux container on the compose network. After Phase 7: 68 s with 101 tests                                                                                                               |
-| Consecutive green runs | Concurrency tests 3 of 3 with contended ordering; naive race test 5 of 5 on Linux; full suite on Windows and Linux                                                                                                                                          |
-| GitHub Actions (Linux) | Green on every push: Phase 3 run 80 s, Phase 4 run 56 s, Phase 5 run 56 s, Phase 6 first run 640 s (an orphaned test process, fixed), after the fix 52 s, Phase 7 106 s with the added Redis service and 19 more tests, Phase 8 64 s (job time incl. setup) |
+| Measure                | Result                                                                                                                                                                                                                                                                                                                                            |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Tests                  | **103 passed / 103** (18 files)                                                                                                                                                                                                                                                                                                                   |
+| Full suite wall time   | 106 s on Windows (the naive race demo test adds ~25 s); 111 s in a Linux container on the compose network. After Phase 7: 68 s with 101 tests                                                                                                                                                                                                     |
+| Consecutive green runs | Concurrency tests 3 of 3 with contended ordering; naive race test 5 of 5 on Linux; full suite on Windows and Linux                                                                                                                                                                                                                                |
+| GitHub Actions (Linux) | Green on every push: Phase 3 run 80 s, Phase 4 run 56 s, Phase 5 run 56 s, Phase 6 first run 640 s (an orphaned test process, fixed), after the fix 52 s, Phase 7 106 s with the added Redis service and 19 more tests, Phase 8 64 s, Phase 9: two failed runs (the new frontend job, a hidden dependency), fixed run 76 s (job time incl. setup) |
 
 ### Key tests
 
@@ -61,6 +61,23 @@ Measured 2026-11-01 after Phase 8, on the machine above.
 2026-11-01, Phase 7. Full suite in a `node:24-alpine` container with Postgres and Redis: **101 / 101 passed, Jest exited cleanly, 109 s**.
 
 2026-11-01, Phase 6. Full suite run inside a `node:24-alpine` container (Linux, fresh `npm ci`) against the same Postgres: **82 / 82 passed, Jest exited cleanly, 85 s**. Done because Windows had hidden an orphaned-process bug in T11 that made the first Phase 6 CI run hang (see the [Phase 6 write-up](phases/phase-6-outbox.md)).
+
+## Frontend verification
+
+2026-11-02, Phase 9. Every flow driven in a real browser (1280×800, plus 375 px mobile) against the running API (45-second holds for testing), mock gateway and worker. Measured highlights:
+
+| Check                              | Result                                                                                                  |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| Production bundle                  | 340.6 KB JS (106.7 KB gzipped), 21 KB CSS (4.9 KB gzipped)                                              |
+| Another user takes a selected seat | Removed from the selection and announced within one 2 s refresh                                         |
+| **Pay clicked twice**              | **1 payment, 1 idempotency key, 1 gateway charge** (database and gateway log)                           |
+| Failure by webhook                 | Processing → "Payment failed" after ~1.6 s                                                              |
+| Slow gateway (75 s)                | "Taking longer" message at 62 s (requirement: after 60 s); late webhook confirmed via the re-claim path |
+| Cancel                             | "Refund on its way" at 0.5 s → "Refunded" at 3.0 s (worker tick 1 s)                                    |
+| Seat map at 375 px                 | 328 px wide, 24 px seats, no sideways scrolling                                                         |
+| Keyboard                           | Tab reaches seats with a visible focus outline; held and booked seats skipped                           |
+
+Full list in the [Phase 9 write-up](phases/phase-9-frontend.md).
 
 ## Real-process smoke tests
 
