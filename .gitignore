@@ -8,3 +8,6 @@ tests/k6/data/
 
 # Personal interview prep, kept local only
 docs/interview-notes.md
+
+# Frontend build output
+frontend/dist/

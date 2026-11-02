@@ -1,0 +1,76 @@
+@import 'tailwindcss';
+
+/* Design tokens: a cool box-office paper, navy ink, and marigold reserved for YOUR seats. */
+@theme {
+  --color-paper: #eef1f5;
+  --color-card: #f8f9fb;
+  --color-ink: #1b2333;
+  --color-ink-soft: #4a5468;
+  --color-rule: #c9d1dd;
+  --color-seat: #d5dce7;
+  --color-seat-hover: #c3ccda;
+  --color-booked: #2b3445;
+  --color-marigold: #e9a23b;
+  --color-marigold-deep: #b9781a;
+  --color-teal: #0f766e;
+  --color-brick: #b4441c;
+
+  --font-display: 'Familjen Grotesk', ui-sans-serif, system-ui, sans-serif;
+  --font-sans: 'Public Sans', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+}
+
+@layer base {
+  html {
+    background: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-marigold-deep);
+    outline-offset: 2px;
+  }
+}
+
+/* Someone else is holding this seat: pencilled in, not sold. */
+.seat-held {
+  background-color: var(--color-seat);
+  background-image: repeating-linear-gradient(
+    135deg,
+    rgb(43 52 69 / 0.38) 0 2px,
+    transparent 2px 6px
+  );
+}
+
+/* Your own hold: the same pencil marks, in your colour. */
+.seat-mine {
+  background-color: rgb(233 162 59 / 0.35);
+  background-image: repeating-linear-gradient(
+    135deg,
+    rgb(185 120 26 / 0.55) 0 2px,
+    transparent 2px 6px
+  );
+}
+
+/* Seats change state as the map refreshes; a short fade makes the change noticeable. */
+.seat {
+  transition:
+    background-color 300ms ease,
+    transform 120ms ease,
+    box-shadow 120ms ease;
+}
+
+/* The perforated edge between a ticket's body and its stub. */
+.perforation {
+  background-image: radial-gradient(circle, var(--color-paper) 5px, transparent 5.5px);
+  background-size: 100% 18px;
+  background-repeat: repeat-y;
+  background-position: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .seat {
+    transition: none;
+  }
+}
