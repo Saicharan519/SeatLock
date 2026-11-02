@@ -1,3 +1,18 @@
+# `docker compose up --build` runs the whole system: open http://localhost:8080.
+# For local development run only the databases: `docker compose up -d postgres redis`.
+#
+# The secrets below are local-demo defaults, overridable from the shell or a .env file.
+# Never use them outside your machine.
+
+x-app-env: &app-env
+  NODE_ENV: production
+  LOG_LEVEL: ${LOG_LEVEL:-info}
+  DATABASE_URL: postgres://seatlock:seatlock@postgres:5432/seatlock
+  WEBHOOK_SECRET: ${WEBHOOK_SECRET:-local-demo-webhook-secret-change-me}
+  GATEWAY_URL: http://gateway:4000
+  # The gateway sends webhooks here, inside the compose network
+  API_PUBLIC_URL: http://api:3000
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -26,6 +41,78 @@ services:
       interval: 2s
       timeout: 3s
       retries: 20
+
+  # One-shot job: apply migrations, then seed the admin user and a sample show. Both are
+  # idempotent, so it is safe on every `up`. The API and worker start only after it succeeds.
+  migrate:
+    build: .
+    command:
+      [
+        'sh',
+        '-c',
+        'node_modules/.bin/node-pg-migrate up -m packages/db/migrations --no-verbose && node dist/seed.js',
+      ]
+    environment:
+      <<: *app-env
+      SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL:-admin@seatlock.local}
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-admin12345}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: 'no'
+
+  api:
+    build: .
+    command: ['node', 'dist/api.js']
+    environment:
+      <<: *app-env
+      JWT_SECRET: ${JWT_SECRET:-local-demo-jwt-secret-change-me}
+      REDIS_URL: redis://redis:6379
+      HOLD_TTL_SECONDS: ${HOLD_TTL_SECONDS:-300}
+      # Requests arrive through the frontend's nginx, which sets X-Forwarded-For
+      TRUST_PROXY: 'true'
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://localhost:3000/api/health']
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  worker:
+    build: .
+    command: ['node', 'dist/worker.js']
+    environment:
+      <<: *app-env
+      WORKER_INTERVAL_MS: ${WORKER_INTERVAL_MS:-5000}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  gateway:
+    build: .
+    command: ['node', 'dist/gateway.js']
+    environment:
+      <<: *app-env
+      # The mock gateway's failure modes (POST /__control) drive the demo scenarios
+      GATEWAY_CONTROL_ENABLED: 'true'
+    ports:
+      - '4000:4000'
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    ports:
+      - '8080:80'
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
 
 volumes:
   pgdata:
