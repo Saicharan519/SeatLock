@@ -74,31 +74,34 @@ Every step was rehearsed against the Docker stack, and the script quotes the mea
 
 ## How it was verified
 
-| Check                                                      | Result                                                                                                        |
-| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `git clone` into an empty folder **outside OneDrive**      | No `.env`, no `node_modules`                                                                                  |
-| `docker compose build --no-cache`                          | 85 s                                                                                                          |
-| First `docker compose up` (empty database)                 | All services healthy in 20 s; both migrations applied from scratch; sample show and admin seeded              |
-| Warm restart                                               | Healthy through nginx in 10.7 s                                                                               |
-| **Book in the browser** at http://localhost:8080           | Sign up → pick A5, A6 → hold → pay → **Confirmed**; reloading the checkout URL works                          |
-| API end to end through nginx                               | hold 201 → pay 202 → webhook → CONFIRMED in 250 ms; worker published `BookingConfirmed`, notification written |
-| Late payment, seats free (API)                             | Expired at 31.9 s, re-claimed and CONFIRMED at 45.5 s                                                         |
-| Late payment, one seat taken (API)                         | REFUND_REQUIRED at 45.5 s, REFUNDED at 47.1 s; the untaken seat stayed free                                   |
-| Late payment, one seat taken (**UI**, exactly as scripted) | Processing past the expiry → "Refund on its way" → "Refunded" after reload; payment REFUNDED 52 s after Pay   |
-| Race demo on the fresh stack                               | Naive told 723 and 532 customers they held a seat; SeatLock exactly 50 (32 s)                                 |
-| Full test suite, typecheck, lint, format                   | 103 / 103, all clean                                                                                          |
+| Check                                                             | Result                                                                                                                                               |
+| ----------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `git clone` into an empty folder **outside OneDrive**             | No `.env`, no `node_modules`                                                                                                                         |
+| `docker compose build --no-cache`                                 | 85 s                                                                                                                                                 |
+| First `docker compose up` (empty database)                        | All services healthy in 20 s; both migrations applied from scratch; sample show and admin seeded                                                     |
+| Warm restart                                                      | Healthy through nginx in 10.7 s                                                                                                                      |
+| **Book in the browser** at http://localhost:8080                  | Sign up → pick A5, A6 → hold → pay → **Confirmed**; reloading the checkout URL works                                                                 |
+| API end to end through nginx                                      | hold 201 → pay 202 → webhook → CONFIRMED in 250 ms; worker published `BookingConfirmed`, notification written                                        |
+| Late payment, seats free (API)                                    | Expired at 31.9 s, re-claimed and CONFIRMED at 45.5 s                                                                                                |
+| Late payment, one seat taken (API)                                | REFUND_REQUIRED at 45.5 s, REFUNDED at 47.1 s; the untaken seat stayed free                                                                          |
+| Late payment, one seat taken (**UI**, exactly as scripted)        | Processing past the expiry → "Refund on its way" → "Refunded" after reload; payment REFUNDED 52 s after Pay                                          |
+| Race demo on the fresh stack                                      | Naive told 723 and 532 customers they held a seat; SeatLock exactly 50 (32 s)                                                                        |
+| Clone **from GitHub**, then fresh-volume starts (`down -v`, `up`) | Old health check: 1 of 5 failed (startup race, see below). TCP health check: **15 of 15** succeeded, healthy in 12–13 s; booking CONFIRMED in 250 ms |
+| Full test suite, typecheck, lint, format                          | 103 / 103, all clean                                                                                                                                 |
 
 ## What happened during this phase
 
 1. **A corrupted build cache.** The first build, run inside the OneDrive folder, failed with `short read: expected 20248489 bytes but got 1421602`: Docker was reading the build context while OneDrive was syncing. The next build then failed differently: `Unable to resolve @typescript/typescript-linux-x64`, although a plain `npm ci` in the same Alpine image installed that package fine. The cause was the broken first attempt: its `npm ci` layer had been cached, and later builds reused it. Rebuilding that stage with `--no-cache` fixed it, and the final verification used a clone outside OneDrive with `--no-cache` throughout. Lesson: when a build error contradicts a direct experiment, suspect the cache.
 2. **Four copies of one image.** The first compose file built the backend image once per service, tagging it four times. Giving the services one shared `image:` name produces a single image.
 3. **The race demo needed a database nothing created.** `seatlock_load` had been created by hand in Phase 8. On a fresh volume `init.sql` now creates it, and the demo script includes the one-time migrate command for an existing volume.
-4. **A README claim with no record behind it.** Two of the summarised trade-offs (Postgres locks rather than Redis locks; pessimistic rather than optimistic locking) were true of the design but not written down anywhere. They were added to [decisions.md](../decisions.md) with their reasons rather than left as unsupported claims.
+4. **The second fresh clone found a real startup race.** Cloning from GitHub onto a new volume, the `migrate` job failed with `ECONNREFUSED` and nothing else started. On a new volume, the Postgres image first runs a **temporary server** to execute `init.sql`, then shuts it down and starts the real one. The health check (`pg_isready` over the Unix socket) answered "ready" during that temporary phase, so compose started `migrate` just before the restart. The first fresh clone had passed by luck of timing; creating a second database in `init.sql` made the init phase longer and exposed it. The fix is to check over **TCP** (`pg_isready -h 127.0.0.1`), which the temporary server doesn't listen on. Measured, not assumed: with the old check 1 of 5 fresh starts failed in a loop; with the TCP check **15 of 15** succeeded, each healthy in 12–13 s. Lesson: "healthy" has to mean ready for the clients that will actually connect, and only a genuinely fresh run finds first-start bugs.
+5. **A README claim with no record behind it.** Two of the summarised trade-offs (Postgres locks rather than Redis locks; pessimistic rather than optimistic locking) were true of the design but not written down anywhere. They were added to [decisions.md](../decisions.md) with their reasons rather than left as unsupported claims.
 
 ## Key takeaways
 
 - A clean clone plus `docker compose up` is the honest test of "runs anywhere". It was run for real, outside the development folder, with no build cache.
 - Ordering matters as much as packaging: a one-shot migrate job plus health-check conditions means no service starts against a missing schema or an unready dependency.
 - Bundling with esbuild resolves the monorepo's path aliases at build time, so the runtime image is plain JavaScript with production dependencies only.
+- A health check must test what clients actually use: Postgres answering on its Unix socket during first-time init isn't the same as accepting TCP connections.
 - A reverse proxy changes the threat model for anything keyed on client IP: trust the proxy, and make the proxy overwrite the forwarded header.
 - Demo steps are rehearsed and timed like tests, so the recording shows what the system really does.

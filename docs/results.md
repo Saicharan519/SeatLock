@@ -152,15 +152,16 @@ Each iteration: GET the seat map; 20% of iterations also hold a random AVAILABLE
 
 2026-11-02. `git clone` into an empty folder outside OneDrive (no `.env`, no `node_modules`), then `docker compose build --no-cache` and `docker compose up`:
 
-| Check                                   | Result                                                                                                 |
-| --------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| Build from scratch, no cache            | 85 s                                                                                                   |
-| First start, empty database             | All services healthy in 20 s; both migrations applied; admin and sample show seeded                    |
-| Warm restart                            | Healthy through nginx in 10.7 s                                                                        |
-| Image sizes                             | Backend 288 MB (one image for API, worker, gateway, migrate), frontend 93 MB                           |
-| Booking in the browser                  | Sign up → hold A5, A6 → pay → Confirmed; reloading a deep link works                                   |
-| Booking through nginx (API)             | hold 201 → pay 202 → CONFIRMED in 250 ms; outbox event published, notification written                 |
-| Late payment, seats free                | 30 s hold, 45 s gateway delay: EXPIRED at 31.9 s, re-claimed and CONFIRMED at 45.5 s                   |
-| Late payment, one seat taken            | REFUND_REQUIRED at 45.5 s, REFUNDED at 47.1 s; the untaken seat stayed free                            |
-| Late payment, one seat taken, in the UI | 50 s delay: Processing past expiry → "Refund on its way" → "Refunded"; payment REFUNDED 52 s after Pay |
-| Race demo against the stack's Postgres  | Naive told 723 and 532 customers they held a seat; SeatLock 50; 32 s                                   |
+| Check                                   | Result                                                                                                                                          |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| Build from scratch, no cache            | 85 s                                                                                                                                            |
+| First start, empty database             | All services healthy in 20 s; both migrations applied; admin and sample show seeded                                                             |
+| Warm restart                            | Healthy through nginx in 10.7 s                                                                                                                 |
+| Image sizes                             | Backend 288 MB (one image for API, worker, gateway, migrate), frontend 93 MB                                                                    |
+| Booking in the browser                  | Sign up → hold A5, A6 → pay → Confirmed; reloading a deep link works                                                                            |
+| Booking through nginx (API)             | hold 201 → pay 202 → CONFIRMED in 250 ms; outbox event published, notification written                                                          |
+| Late payment, seats free                | 30 s hold, 45 s gateway delay: EXPIRED at 31.9 s, re-claimed and CONFIRMED at 45.5 s                                                            |
+| Late payment, one seat taken            | REFUND_REQUIRED at 45.5 s, REFUNDED at 47.1 s; the untaken seat stayed free                                                                     |
+| Late payment, one seat taken, in the UI | 50 s delay: Processing past expiry → "Refund on its way" → "Refunded"; payment REFUNDED 52 s after Pay                                          |
+| Fresh-volume starts (clone from GitHub) | Socket health check: 1 of 5 failed (migrate connected during Postgres's init restart). TCP health check: 15 of 15 succeeded, healthy in 12–13 s |
+| Race demo against the stack's Postgres  | Naive told 723 and 532 customers they held a seat; SeatLock 50; 32 s                                                                            |

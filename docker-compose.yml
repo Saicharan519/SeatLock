@@ -27,7 +27,10 @@ services:
       - pgdata:/var/lib/postgresql/data
       - ./packages/db/docker/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U seatlock -d seatlock']
+      # Over TCP on purpose: on a new volume Postgres first runs a temporary server
+      # (Unix socket only) for init.sql, then restarts. A socket check passes during
+      # that window and lets the migrate job connect just before the restart.
+      test: ['CMD-SHELL', 'pg_isready -h 127.0.0.1 -U seatlock -d seatlock']
       interval: 2s
       timeout: 3s
       retries: 20
