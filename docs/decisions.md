@@ -158,6 +158,29 @@ Made before coding, after two independent reviews of the PRD.
 | I13 | The frontend **declares all its own dependencies** (including `@types/node`); CI builds it in isolation | Relying on the parent project's `node_modules`      | A hidden dependency on the parent folder passed locally and failed in CI                                                              |
 | I14 | CI on **`actions/checkout@v5` and `actions/setup-node@v5`**                                             | v4                                                  | v4 runs on GitHub's deprecated Node 20 runtime                                                                                        |
 
+## J. Core locking choices (recorded in Phase 10)
+
+These were part of the design from the start but had not been written down with their reasons.
+
+| #   | Decision                                        | Rejected                             | Why                                                                                                                                                                                                  |
+| --- | ----------------------------------------------- | ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| J1  | **Postgres row locks** for seats                | A Redis lock per seat (e.g. Redlock) | Postgres is already the source of truth. A separate lock service adds failure modes, such as a lock expiring while the transaction that relies on it is still running, without making anything safer |
+| J2  | **Pessimistic locking** (`SELECT … FOR UPDATE`) | Optimistic version checks with retry | Contention on the same seats is the normal case here. Under heavy contention optimistic writers mostly fail and retry, wasting work; blocking locks serve them in turn                               |
+
+## K. Delivery (Phase 10)
+
+| #   | Decision                                                                                                 | Rejected                                  | Why                                                                                                                                                              |
+| --- | -------------------------------------------------------------------------------------------------------- | ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| K1  | **One backend image** for API, worker, gateway and migrate job; compose picks the program with `command` | An image per service                      | Same code and dependencies; one build, one 288 MB image                                                                                                          |
+| K2  | **esbuild bundles** the entry points; npm packages stay external                                         | `tsc` output; running `tsx` in production | `tsc` leaves the `@seatlock/*` path aliases unresolved at runtime; esbuild inlines them. The runtime image is plain JavaScript with production dependencies only |
+| K3  | Migrations and seed in a **one-shot `migrate` service**; API and worker wait for it to exit successfully | Migrating on API start-up                 | With several processes starting at once, one job owns the schema change; nothing starts against a missing schema                                                 |
+| K4  | **nginx serves the UI and proxies `/api`**; the API isn't published on a host port                       | Publishing the API and enabling CORS      | One origin, as in development; one entry point                                                                                                                   |
+| K5  | Behind nginx the API runs with **`TRUST_PROXY=true`**, and nginx **overwrites** `X-Forwarded-For`        | Appending to the header                   | Otherwise a client could choose the IP the rate limiter sees by sending its own header                                                                           |
+| K6  | **Local-demo default secrets** in `docker-compose.yml`, overridable by environment                       | Requiring a `.env` before the first `up`  | A fresh clone must run with one command; the file says the defaults are for local use only                                                                       |
+| K7  | `GATEWAY_CONTROL_ENABLED` switches the mock gateway's failure modes on explicitly                        | Running the gateway in development mode   | The stack runs everything in production mode; the demo still needs the control endpoint. The default (off in production) is unchanged                            |
+| K8  | `init.sql` also creates `seatlock_load`                                                                  | Creating it by hand                       | The race demo and load tests work on a fresh volume                                                                                                              |
+| K9  | The demo is delivered as a **rehearsed, timed script**, and the recording is made from it                | Unscripted recording                      | Each step is checked against the real stack first, so the recording shows real behaviour                                                                         |
+
 ## Known limitations (documented, not bugs)
 
 - **Crash between the pay commit and the gateway call:** the payment stays INITIATED and the gateway never sees it. A same-key retry replays the 202 without calling the gateway. The hold expires, and the sweep fails the payment after 15 minutes.
@@ -176,8 +199,10 @@ Made before coding, after two independent reviews of the PRD.
 - **Local test environment:** on desktop Windows, tests that open hundreds of simultaneous connections need the client socket pool (E4). Linux CI doesn't.
 - **One API process tops out at one CPU core.** Under the spike it drained ~250–350 holds per second; more throughput needs more API instances. Correctness doesn't depend on it.
 - **Load numbers come from one laptop**, with every container sharing a Docker Desktop VM; run-to-run variance was noticeable (spike p95 2.1–3.0 s). Not a production benchmark.
-- **The API runs through `tsx`**, not compiled JavaScript. Only startup differs; it isn't expected to change the steady-state numbers, but it wasn't measured separately.
+- **The load-test numbers were measured with the API running through `tsx`.** Since Phase 10 the Docker image runs esbuild-compiled JavaScript. Only startup should differ, but the steady-state numbers weren't re-measured on the compiled build.
 - **The UI's countdown trusts the browser's clock** against the server's `expiresAt`; a badly skewed device clock shows the wrong time left. The server still decides (paying after expiry is refused).
 - **The UI is verified by hand in a browser**, not by automated UI tests.
 - **The seat map refreshes every 2 s**, so another person's hold can take up to 2 s to appear; a hold attempt on such a seat gets a clear "someone else got it first" message.
 - **Mobile seat tiles are 24 px**, smaller than the usual touch-target guideline.
+- **The Docker stack's default secrets are public** (they're in `docker-compose.yml`). They're for running on your own machine; set real secrets through the environment anywhere else.
+- **The Docker stack enables the mock gateway's control endpoint** on port 4000 so the demo can switch failure modes. Fine for a local demo; a real deployment would use a real gateway.

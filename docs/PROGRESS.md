@@ -1,24 +1,34 @@
 # SeatLock progress
 
-Last updated: 2026-11-02, after Phase 9.
+Last updated: 2026-11-02, after Phase 10. **All phases complete.**
 
 ## Phases
 
-| Phase                         | Status   | Commit                                         | CI                                                                                                                                                             | Tests after                    | Write-up                                      |
-| ----------------------------- | -------- | ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ | --------------------------------------------- |
-| 0 Setup                       | Done     | `431a4e6`                                      | n/a (no remote yet)                                                                                                                                            |                                | [phase-0-2](phases/phase-0-2-foundation.md)   |
-| 1 Foundation                  | Done     | `431a4e6`                                      | n/a                                                                                                                                                            | 8                              | [phase-0-2](phases/phase-0-2-foundation.md)   |
-| 2 Auth, shows, seat map, seed | Done     | `431a4e6`                                      | n/a                                                                                                                                                            | 20                             | [phase-0-2](phases/phase-0-2-foundation.md)   |
-| 3 Holds and expiry            | Done     | `b47e714`                                      | [passed](https://github.com/Saicharan519/SeatLock/actions/runs/41315572400) (first CI run; covers Phases 0–3)                                                  | 36                             | [phase-3](phases/phase-3-holds-and-expiry.md) |
-| 4 Payments and webhooks       | Done     | `df5ad01`                                      | [passed](https://github.com/Saicharan519/SeatLock/actions/runs/41316616029)                                                                                    | 54                             | [phase-4](phases/phase-4-payments.md)         |
-| 5 Failure and edge paths      | Done     | `0206c32`                                      | [passed](https://github.com/Saicharan519/SeatLock/actions/runs/41318197495)                                                                                    | 69                             | [phase-5](phases/phase-5-failure-paths.md)    |
-| 6 Outbox and consumers        | Done     | `c39d51a`, fix `6068703`                       | [passed](https://github.com/Saicharan519/SeatLock/actions/runs/41327978843) (52 s; the first run took 640 s, see write-up)                                     | 82                             | [phase-6](phases/phase-6-outbox.md)           |
-| 7 Hardening and observability | Done     | `2dd95eb`                                      | [passed](https://github.com/Saicharan519/SeatLock/actions/runs/41332550345) (1 min 46 s, now with a Redis service)                                             | 101                            | [phase-7](phases/phase-7-hardening.md)        |
-| 8 Performance proof (k6)      | Done     | `2b8e225`                                      | [passed](https://github.com/Saicharan519/SeatLock/actions/runs/41335794582) (1 min 4 s)                                                                        | 103                            | [phase-8](phases/phase-8-performance.md)      |
-| 9 Frontend                    | Done     | `42f6942`, cleanup `c3e3ac5`, CI fix `7932e4e` | [passed](https://github.com/Saicharan519/SeatLock/actions/runs/41384848500) after a fix (the first two Phase 9 runs failed: a hidden dependency, see write-up) | 103 (backend) + frontend build | [phase-9](phases/phase-9-frontend.md)         |
-| 10 Polish and delivery        | **Next** |                                                |                                                                                                                                                                |                                |                                               |
+| Phase                         | Status | Commit                                         | CI                                                                                                                                                             | Tests after                                        | Write-up                                      |
+| ----------------------------- | ------ | ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- | --------------------------------------------- |
+| 0 Setup                       | Done   | `431a4e6`                                      | n/a (no remote yet)                                                                                                                                            |                                                    | [phase-0-2](phases/phase-0-2-foundation.md)   |
+| 1 Foundation                  | Done   | `431a4e6`                                      | n/a                                                                                                                                                            | 8                                                  | [phase-0-2](phases/phase-0-2-foundation.md)   |
+| 2 Auth, shows, seat map, seed | Done   | `431a4e6`                                      | n/a                                                                                                                                                            | 20                                                 | [phase-0-2](phases/phase-0-2-foundation.md)   |
+| 3 Holds and expiry            | Done   | `b47e714`                                      | [passed](https://github.com/Saicharan519/SeatLock/actions/runs/41315572400) (first CI run; covers Phases 0–3)                                                  | 36                                                 | [phase-3](phases/phase-3-holds-and-expiry.md) |
+| 4 Payments and webhooks       | Done   | `df5ad01`                                      | [passed](https://github.com/Saicharan519/SeatLock/actions/runs/41316616029)                                                                                    | 54                                                 | [phase-4](phases/phase-4-payments.md)         |
+| 5 Failure and edge paths      | Done   | `0206c32`                                      | [passed](https://github.com/Saicharan519/SeatLock/actions/runs/41318197495)                                                                                    | 69                                                 | [phase-5](phases/phase-5-failure-paths.md)    |
+| 6 Outbox and consumers        | Done   | `c39d51a`, fix `6068703`                       | [passed](https://github.com/Saicharan519/SeatLock/actions/runs/41327978843) (52 s; the first run took 640 s, see write-up)                                     | 82                                                 | [phase-6](phases/phase-6-outbox.md)           |
+| 7 Hardening and observability | Done   | `2dd95eb`                                      | [passed](https://github.com/Saicharan519/SeatLock/actions/runs/41332550345) (1 min 46 s, now with a Redis service)                                             | 101                                                | [phase-7](phases/phase-7-hardening.md)        |
+| 8 Performance proof (k6)      | Done   | `2b8e225`                                      | [passed](https://github.com/Saicharan519/SeatLock/actions/runs/41335794582) (1 min 4 s)                                                                        | 103                                                | [phase-8](phases/phase-8-performance.md)      |
+| 9 Frontend                    | Done   | `42f6942`, cleanup `c3e3ac5`, CI fix `7932e4e` | [passed](https://github.com/Saicharan519/SeatLock/actions/runs/41384848500) after a fix (the first two Phase 9 runs failed: a hidden dependency, see write-up) | 103 (backend) + frontend build                     | [phase-9](phases/phase-9-frontend.md)         |
+| 10 Polish and delivery        | Done   | `PHASE10_COMMITS`                              | PHASE10_CI                                                                                                                                                     | 103 (backend) + frontend build + fresh-clone stack | [phase-10](phases/phase-10-delivery.md)       |
 
-**All P0 functional requirements are now implemented** (PRD milestone "P0 complete").
+**All P0 functional requirements are implemented, and all five MVP acceptance criteria are met** (the demo recording is scripted and rehearsed; see below).
+
+## MVP acceptance criteria (PRD 13)
+
+| #   | Criterion                                                                            | Status                                                                                               |
+| --- | ------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
+| 1   | T1–T19 pass; CI runs Jest against PostgreSQL                                         | Done                                                                                                 |
+| 2   | G1–G6 met; G7 measured and reported                                                  | Done ([results](results.md))                                                                         |
+| 3   | `docker compose up` runs the full system from a clean clone, with seed data          | Done, verified from a fresh clone with no build cache (Phase 10)                                     |
+| 4   | README: architecture, state machines, schema, concurrency rules, results, trade-offs | Done ([README](../README.md))                                                                        |
+| 5   | Demo recording of the race and the late payment                                      | Script written and rehearsed ([demo-script](demo-script.md)); recording to be linked from the README |
 
 ## PRD acceptance tests (T1–T19)
 
@@ -101,6 +111,11 @@ Details: [results.md](results.md).
 
 FR-20 and FR-21 done: shows, live seat grid, server-driven countdown, Pay with one idempotency key per booking, Processing polling with the 60-second message, separate outcome screens, My bookings with cancel. Every flow verified in a browser against the running stack; see the [phase write-up](phases/phase-9-frontend.md).
 
+## Delivery (Phase 10)
+
+`docker compose up --build` runs Postgres, Redis, a migrate-and-seed job, the API, the worker, the mock gateway and nginx serving the UI at http://localhost:8080. Verified from a fresh clone: built in 85 s with no cache, healthy in 20 s, seat booked in the browser. See the [phase write-up](phases/phase-10-delivery.md).
+
 ## Remaining work
 
-- **Phase 10:** full README, diagrams, Docker Compose for all services, demo recording.
+- Record the demo from [docs/demo-script.md](demo-script.md) and link it in the README.
+- Optional: deploy to a host (needs a hosting account; many free tiers don't run background workers).
