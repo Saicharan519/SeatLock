@@ -295,19 +295,14 @@ npm run migrate:up
 npm run seed
 ```
 
-In three terminals:
+Then start the API, worker, mock gateway and UI together in one terminal:
 
 ```bash
-npm run dev:api               # http://localhost:3000
-npm run dev:gateway           # mock payment gateway on :4000
-npm run dev:worker
+cd frontend && npm ci && cd ..   # once
+npm run dev                      # UI at http://localhost:5173, API on :3000, gateway on :4000
 ```
 
-And the UI at http://localhost:5173 (it proxies `/api` to the API):
-
-```bash
-cd frontend && npm ci && npm run dev
-```
+(`npm run dev:api`, `dev:gateway`, `dev:worker` and `dev:web` start each piece on its own. The UI proxies `/api` to the API.)
 
 Run the tests (they use a separate `seatlock_test` database):
 
@@ -346,7 +341,8 @@ Errors share one shape: `{ "error": { "code", "message", "requestId" } }`.
 
 | Doc                                        | What's in it                                                                |
 | ------------------------------------------ | --------------------------------------------------------------------------- |
-| [prd.md](prd.md)                           | Product requirements, concurrency rules, state machines                     |
+| [docs/prd-v2.md](docs/prd-v2.md)           | v2 plan (in progress): movies, theatres, real checkout, deployment          |
+| [prd.md](prd.md)                           | v1 requirements: concurrency rules, state machines                          |
 | [docs/PROGRESS.md](docs/PROGRESS.md)       | Phase status, acceptance-test checklist                                     |
 | [docs/decisions.md](docs/decisions.md)     | Every design decision and trade-off, plus known limitations                 |
 | [docs/results.md](docs/results.md)         | Measured results and environment                                            |

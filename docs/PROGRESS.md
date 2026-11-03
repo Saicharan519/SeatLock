@@ -1,8 +1,21 @@
 # SeatLock progress
 
-Last updated: 2026-11-02, after Phase 10. **All phases complete.**
+Last updated: 2026-11-03, after Phase 11. **v1 (Phases 0–10) complete. v2 in progress** ([prd-v2.md](prd-v2.md)): turning the backend into a full movie-booking product.
 
-## Phases
+## v2 phases
+
+| Phase                             | Status  | Commit        | Tests after                          | Write-up                                    |
+| --------------------------------- | ------- | ------------- | ------------------------------------ | ------------------------------------------- |
+| 11 Dev workflow and understanding | Done    | _uncommitted_ | 103 / 103 (re-run 2026-11-03, 113 s) | [phase-11](phases/phase-11-dev-workflow.md) |
+| 12 Product data model             | Next    |               |                                      |                                             |
+| 13 Frontend rebuild               | Planned |               |                                      |                                             |
+| 13.5 First deployment             | Planned |               |                                      |                                             |
+| 14 Payments v2 (Razorpay + mock)  | Planned |               |                                      |                                             |
+| 15 Admin dashboard                | Planned |               |                                      |                                             |
+| 16 Hardening                      | Planned |               |                                      |                                             |
+| 17 Interview pack                 | Planned |               |                                      |                                             |
+
+## v1 phases
 
 | Phase                         | Status | Commit                                         | CI                                                                                                                                                                    | Tests after                                        | Write-up                                      |
 | ----------------------------- | ------ | ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- | --------------------------------------------- |
