@@ -1,36 +1,128 @@
 @import 'tailwindcss';
 
-/* Design tokens: a cool box-office paper, navy ink, and marigold reserved for YOUR seats. */
+/*
+ * A night at the cinema. The auditorium is a warm near-black; text is the soft white of
+ * a projected screen; marigold is the one accent, and always means "yours" (your picks,
+ * your hold, your ticket). Tickets are printed on cream stock: the only light object.
+ */
 @theme {
-  --color-paper: #eef1f5;
-  --color-card: #f8f9fb;
-  --color-ink: #1b2333;
-  --color-ink-soft: #4a5468;
-  --color-rule: #c9d1dd;
-  --color-seat: #d5dce7;
-  --color-seat-hover: #c3ccda;
-  --color-booked: #2b3445;
-  --color-marigold: #e9a23b;
-  --color-marigold-deep: #b9781a;
-  --color-teal: #0f766e;
-  --color-brick: #b4441c;
+  --color-night: #0e0c0b;
+  --color-night-2: #171412;
+  --color-night-3: #221e1b;
+  --color-line: #332d28;
+  --color-line-2: #4a423b;
+  --color-screen: #f4efe8;
+  --color-dim: #b3aaa0;
+  --color-faint: #7d746b;
 
-  --font-display: 'Familjen Grotesk', ui-sans-serif, system-ui, sans-serif;
-  --font-sans: 'Public Sans', ui-sans-serif, system-ui, sans-serif;
+  --color-marigold: #f2a93b;
+  --color-marigold-hi: #ffc566;
+  --color-marigold-deep: #b9781a;
+
+  --color-ok: #6fcf97;
+  --color-warn: #f2c94c;
+  --color-bad: #ef6b57;
+
+  /* Ticket stock */
+  --color-cream: #f6eedd;
+  --color-cream-2: #ebdfc6;
+  --color-ink: #231b14;
+  --color-ink-soft: #6b5a48;
+
+  /* Seat colours */
+  --color-seat: #3a332d;
+  --color-seat-hover: #554b42;
+  --color-seat-booked: #1f1b18;
+
+  --font-display: 'Big Shoulders Display', ui-sans-serif, system-ui, sans-serif;
+  --font-sans: 'Hanken Grotesk', ui-sans-serif, system-ui, sans-serif;
   --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+
+  --animate-rise: rise 600ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  --animate-fade: fade 400ms ease both;
+
+  @keyframes rise {
+    from {
+      opacity: 0;
+      transform: translateY(14px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  @keyframes fade {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
 }
 
 @layer base {
   html {
-    background: var(--color-paper);
-    color: var(--color-ink);
+    background: var(--color-night);
+    color: var(--color-screen);
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
+    color-scheme: dark;
+  }
+  body {
+    min-height: 100vh;
   }
   :focus-visible {
-    outline: 2px solid var(--color-marigold-deep);
+    outline: 2px solid var(--color-marigold);
     outline-offset: 2px;
   }
+  ::selection {
+    background: var(--color-marigold);
+    color: var(--color-night);
+  }
+}
+
+/* Film grain over the whole page: a quiet texture so the black isn't flat. */
+.grain::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 60;
+  opacity: 0.05;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* Marquee bulbs: a row of warm dots that breathe, like the lights around a cinema sign. */
+.bulbs {
+  height: 8px;
+  background-image: radial-gradient(circle, var(--color-marigold-hi) 2px, transparent 2.6px);
+  background-size: 16px 8px;
+  background-repeat: repeat-x;
+  filter: drop-shadow(0 0 4px rgb(242 169 59 / 0.75));
+  animation: bulbs 2.4s ease-in-out infinite;
+}
+@keyframes bulbs {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* The projector beam: light falling from the screen over the seats. */
+.beam {
+  background:
+    radial-gradient(60% 120% at 50% 0%, rgb(244 239 232 / 0.11), transparent 70%),
+    conic-gradient(
+      from 180deg at 50% -10%,
+      transparent 150deg,
+      rgb(244 239 232 / 0.05) 170deg,
+      rgb(244 239 232 / 0.05) 190deg,
+      transparent 210deg
+    );
 }
 
 /* Someone else is holding this seat: pencilled in, not sold. */
@@ -38,39 +130,89 @@
   background-color: var(--color-seat);
   background-image: repeating-linear-gradient(
     135deg,
-    rgb(43 52 69 / 0.38) 0 2px,
+    rgb(244 239 232 / 0.22) 0 2px,
     transparent 2px 6px
   );
 }
 
-/* Your own hold: the same pencil marks, in your colour. */
+/* Your own live hold: the same pencil marks, in your colour. */
 .seat-mine {
-  background-color: rgb(233 162 59 / 0.35);
+  background-color: rgb(242 169 59 / 0.3);
   background-image: repeating-linear-gradient(
     135deg,
-    rgb(185 120 26 / 0.55) 0 2px,
+    rgb(242 169 59 / 0.7) 0 2px,
     transparent 2px 6px
   );
 }
 
-/* Seats change state as the map refreshes; a short fade makes the change noticeable. */
 .seat {
   transition:
     background-color 300ms ease,
     transform 120ms ease,
-    box-shadow 120ms ease;
+    box-shadow 160ms ease;
 }
 
-/* The perforated edge between a ticket's body and its stub. */
-.perforation {
-  background-image: radial-gradient(circle, var(--color-paper) 5px, transparent 5.5px);
-  background-size: 100% 18px;
+/* A poster's sheen on hover. */
+.poster-card img {
+  transition:
+    transform 500ms cubic-bezier(0.2, 0.7, 0.2, 1),
+    filter 300ms ease;
+}
+.poster-card:hover img {
+  transform: scale(1.04);
+}
+
+/* Ticket stock: cream paper with a faint print texture, and punched perforations. */
+.ticket-paper {
+  background-color: var(--color-cream);
+  background-image:
+    radial-gradient(rgb(35 27 20 / 0.045) 1px, transparent 1px),
+    linear-gradient(180deg, rgb(255 255 255 / 0.35), transparent 40%);
+  background-size:
+    6px 6px,
+    100% 100%;
+  color: var(--color-ink);
+}
+.perforation-x {
+  background-image: radial-gradient(circle, var(--color-night) 6px, transparent 6.5px);
+  background-size: 22px 100%;
+  background-repeat: repeat-x;
+  background-position: center;
+}
+.perforation-y {
+  background-image: radial-gradient(circle, var(--color-night) 6px, transparent 6.5px);
+  background-size: 100% 22px;
   background-repeat: repeat-y;
   background-position: center;
 }
 
+/* Hide scrollbars on horizontal strips (dates, chips) but keep them scrollable. */
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .seat {
-    transition: none;
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+  }
+}
+
+/* Printing a ticket: just the ticket, on white. */
+@media print {
+  html,
+  body {
+    background: white !important;
+  }
+  header,
+  footer,
+  .grain::after {
+    display: none !important;
   }
 }

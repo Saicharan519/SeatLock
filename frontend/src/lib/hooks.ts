@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 
-/** Re-renders every second; returns the current time in ms. */
+/** Re-renders every intervalMs; returns the current time in ms. */
 export function useNow(intervalMs = 1000): number {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -32,4 +32,31 @@ export function usePolling(fn: () => Promise<void>, intervalMs: number, active =
       clearTimeout(timer);
     };
   }, [intervalMs, active]);
+}
+
+/** Loads data once per key change, tracking loading and error. Stale responses are ignored. */
+export function useLoad<T>(load: () => Promise<T>, deps: unknown[]) {
+  const [state, setState] = useState<{ data: T | null; error: string | null; loading: boolean }>({
+    data: null,
+    error: null,
+    loading: true,
+  });
+  useEffect(() => {
+    let current = true;
+    setState((s) => ({ ...s, loading: true, error: null }));
+    load()
+      .then((data) => current && setState({ data, error: null, loading: false }))
+      .catch((e: Error) => current && setState({ data: null, error: e.message, loading: false }));
+    return () => {
+      current = false;
+    };
+  }, deps);
+  return state;
+}
+
+/** Sets document.title while mounted. */
+export function useTitle(title: string | undefined) {
+  useEffect(() => {
+    if (title) document.title = `${title} · SeatLock`;
+  }, [title]);
 }

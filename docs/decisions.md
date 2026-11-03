@@ -212,6 +212,22 @@ These were part of the design from the start but had not been written down with 
 | M12 | Test factory and race/load fixtures use a **standard 50-seat layout** (`createStandardShow`)                  | Rewriting tests for seeded layouts                     | "1,000 users, 50 seats" keeps its meaning; v1 test bodies didn't change                                                                                 |
 | M13 | The v1 UI was **adapted minimally** (titles, venues, per-seat prices, any layout)                             | Leaving it broken until Phase 13                       | The app stays usable between phases                                                                                                                     |
 
+## N. Frontend rebuild (Phase 13)
+
+| #   | Decision                                                                                                       | Rejected                                    | Why                                                                                                |
+| --- | -------------------------------------------------------------------------------------------------------------- | ------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| N1  | **Dark "cinema" theme**, marigold reserved for "yours", cream paper only for the ticket                        | A generic light dashboard style             | A recognisable identity; one accent with one meaning keeps the seat map readable                   |
+| N2  | **Public browsing**; sign-in only to hold, pay and view bookings                                               | Everything behind sign-in (v1)              | How real ticketing sites work; lets an interviewer see the product before signing up               |
+| N3  | **Seat picks saved in `sessionStorage`** across the sign-in detour                                             | Losing the selection                        | Signing in mid-booking shouldn't cost the customer their seats                                     |
+| N4  | `next` redirect accepts **same-site paths only**                                                               | Redirecting to any `next` value             | Prevents an open redirect through a crafted sign-in link                                           |
+| N5  | **All times formatted in IST**                                                                                 | The viewer's local timezone                 | Matches the API's calendar days; the date strip and showtimes can't disagree                       |
+| N6  | Filters (genre, language, search) **in the URL**                                                               | Component state only                        | Shareable, bookmarkable, survives reload                                                           |
+| N7  | **Payment tracker** showing started → awaiting webhook → confirmed                                             | A spinner                                   | Makes the asynchronous, webhook-confirmed design visible and explains why closing the page is safe |
+| N8  | QR code generated in the browser (`qrcode`), encoding `SEATLOCK:<booking id>:<seats>`                          | A server-generated image; no QR             | No extra endpoint; a scanner can look the booking up by id                                         |
+| N9  | **CSS-only motion** (staggered rise, hero crossfade, breathing bulbs), disabled under `prefers-reduced-motion` | An animation library                        | Small bundle; accessible                                                                           |
+| N10 | No convenience fee shown                                                                                       | Displaying a fee the backend doesn't charge | The total shown must be exactly what is charged                                                    |
+| N11 | Posters at the size each layout needs (TMDB `w185`/`w342`/`w500`/`w1280`), with a typographic fallback         | Always the largest image                    | Faster pages; a missing or broken image never shows a broken icon                                  |
+
 ## Known limitations (documented, not bugs)
 
 - **Crash between the pay commit and the gateway call:** the payment stays INITIATED and the gateway never sees it. A same-key retry replays the 202 without calling the gateway. The hold expires, and the sweep fails the payment after 15 minutes.
@@ -234,7 +250,9 @@ These were part of the design from the start but had not been written down with 
 - **The UI's countdown trusts the browser's clock** against the server's `expiresAt`; a badly skewed device clock shows the wrong time left. The server still decides (paying after expiry is refused).
 - **The UI is verified by hand in a browser**, not by automated UI tests.
 - **The seat map refreshes every 2 s**, so another person's hold can take up to 2 s to appear; a hold attempt on such a seat gets a clear "someone else got it first" message.
-- **Mobile seat tiles are 24 px**, smaller than the usual touch-target guideline.
+- **Mobile seat tiles are 24 px**, smaller than the usual touch-target guideline; wide screens scroll sideways on phones (opening centred on the screen).
+- **The site loads fonts from Google Fonts and posters from TMDB at runtime**; offline, it falls back to system fonts and typographic posters.
+- **A refund for a charge made before the mock gateway restarted retries and then fails** (the gateway forgets charges on restart). To be fixed in Phase 14.
 - **The Docker stack's default secrets are public** (they're in `docker-compose.yml`). They're for running on your own machine; set real secrets through the environment anywhere else.
 - **Databases that had v1 data keep a legacy movie** ("Interstellar (Re-release)") at a theatre in the city "Unknown", created by the Phase 12 migration from the old sample show. Fresh installs don't have it.
 - **Seed data is a demo:** real film titles and TMDB poster URLs, fictional theatres, approximate ratings. Posters load from TMDB's CDN at runtime.

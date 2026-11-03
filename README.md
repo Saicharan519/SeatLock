@@ -1,6 +1,6 @@
 # SeatLock
 
-A ticket-booking backend (BookMyShow-style) built around one guarantee:
+A movie-ticket booking site, BookMyShow-style: browse films in your city, pick a showtime, choose seats on a live seat map, pay, and get a ticket with a QR code. Underneath it is built around one guarantee:
 
 > **For a given show and seat, at most one CONFIRMED booking exists at any time, regardless of concurrent requests, retries, crashes or late payments.**
 
@@ -8,9 +8,13 @@ PostgreSQL enforces it with row locks, guarded updates and constraints, not just
 
 [![CI](https://github.com/Saicharan519/SeatLock/actions/workflows/ci.yml/badge.svg)](https://github.com/Saicharan519/SeatLock/actions/workflows/ci.yml)
 
-| Live seat map: hatched seats are held by someone else | Checkout: the hold's countdown comes from the server |
-| ----------------------------------------------------- | ---------------------------------------------------- |
-| ![Seat map](docs/screenshots/seat-map.jpg)            | ![Checkout](docs/screenshots/checkout.jpg)           |
+| Browse what's showing in your city                    | Showtimes by theatre, with live seats left          |
+| ----------------------------------------------------- | --------------------------------------------------- |
+| ![Home](docs/screenshots/home.jpg)                    | ![Movie](docs/screenshots/movie.jpg)                |
+| **Pick seats: each row band has its own price**       | **Checkout: seats are locked to you for 5 minutes** |
+| ![Seat map](docs/screenshots/seat-map.jpg)            | ![Checkout](docs/screenshots/checkout.jpg)          |
+| **Payment confirmed by the gateway's signed webhook** | **Your ticket**                                     |
+| ![Processing](docs/screenshots/processing.jpg)        | ![Ticket](docs/screenshots/ticket.jpg)              |
 
 ## Try it in one command
 
@@ -294,7 +298,7 @@ Details: [docs/results.md](docs/results.md).
 ## Stack
 
 Node.js 24 · TypeScript · Express 5 · PostgreSQL 16 · Redis 7 · Zod · pino · Jest + Supertest · k6 · Docker Compose · GitHub Actions
-UI: React 19 · Vite · Tailwind CSS · nginx
+UI: React 19 · React Router · Vite · Tailwind CSS 4 · nginx
 
 ## Developing locally
 

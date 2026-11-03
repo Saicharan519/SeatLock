@@ -1,58 +1,57 @@
 import { useState } from 'react';
 import { Link } from 'react-router';
-import { Button, Notice } from '../components/ui';
-import { api, ApiError, venueOf, type Booking } from '../lib/api';
-import { formatCountdown, formatMoney, formatWhen } from '../lib/format';
-import { useNow, usePolling } from '../lib/hooks';
+import { Poster } from '../components/Poster';
+import {
+  bookingPill,
+  Button,
+  ButtonLink,
+  EmptyState,
+  Eyebrow,
+  Notice,
+  Skeleton,
+  StatusPill,
+} from '../components/ui';
+import { api, ApiError, type Booking } from '../lib/api';
+import { bookingRef, formatCountdown, formatMoney, formatWhen, seatOrder } from '../lib/format';
+import { useNow, usePolling, useTitle } from '../lib/hooks';
 
-type Tone = 'teal' | 'brick' | 'ink' | 'soft' | 'marigold';
-const TONE: Record<Tone, string> = {
-  teal: 'bg-teal/10 text-teal',
-  brick: 'bg-brick/10 text-brick',
-  ink: 'bg-ink text-paper',
-  soft: 'bg-seat text-ink-soft',
-  marigold: 'bg-marigold/25 text-marigold-deep',
-};
+type Tab = 'upcoming' | 'past';
 
-/** What the customer needs to know about a booking, in their words. */
-function describe(b: Booking, now: number): { text: string; tone: Tone } {
-  const pay = b.payment?.status;
-  const left = (new Date(b.expiresAt).getTime() - now) / 1000;
-  if (b.status === 'CONFIRMED') return { text: 'Confirmed', tone: 'teal' };
-  if (pay === 'REFUNDED')
-    return { text: b.status === 'CANCELLED' ? 'Cancelled · refunded' : 'Refunded', tone: 'soft' };
-  if (pay === 'REFUND_REQUIRED')
-    return {
-      text: b.status === 'CANCELLED' ? 'Cancelled · refund on its way' : 'Refund on its way',
-      tone: 'marigold',
-    };
-  if (pay === 'INITIATED') return { text: 'Processing payment', tone: 'marigold' };
-  if (b.status === 'FAILED' || pay === 'FAILED') return { text: 'Payment failed', tone: 'brick' };
-  if (b.status === 'CANCELLED') return { text: 'Released', tone: 'soft' };
-  if (b.status === 'PENDING' && left > 0)
-    return { text: `Held · ${formatCountdown(left)} left`, tone: 'ink' };
-  return { text: 'Hold expired', tone: 'soft' };
+/** Upcoming: the show hasn't started and the booking is (or may still become) yours. */
+function isUpcoming(b: Booking, now: number) {
+  const future = new Date(b.show.startsAt).getTime() > now;
+  const live =
+    b.status === 'CONFIRMED' ||
+    b.payment?.status === 'INITIATED' ||
+    (b.status === 'PENDING' && new Date(b.expiresAt).getTime() > now);
+  return future && live;
 }
 
-export function MyBookings() {
-  const now = useNow();
-  const [bookings, setBookings] = useState<Booking[] | null>(null);
-  const [confirming, setConfirming] = useState<string | null>(null);
+function BookingCard({
+  booking,
+  now,
+  onCancelled,
+}: {
+  booking: Booking;
+  now: number;
+  onCancelled: () => Promise<void>;
+}) {
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const b = booking;
+  const pill = bookingPill(b.status, b.payment?.status);
+  const secondsLeft = (new Date(b.expiresAt).getTime() - now) / 1000;
+  const held = b.status === 'PENDING' && !b.payment && secondsLeft > 0;
+  const cancellable = b.status === 'CONFIRMED' && new Date(b.show.startsAt).getTime() > now;
 
-  // Refunds and late payments settle in the background; keep the list current
-  usePolling(async () => {
-    const { bookings } = await api.myBookings();
-    setBookings(bookings);
-  }, 3000);
-
-  const cancel = async (id: string) => {
+  const cancel = async () => {
+    setBusy(true);
     setError(null);
     try {
-      await api.cancel(id);
-      setConfirming(null);
-      const { bookings } = await api.myBookings();
-      setBookings(bookings);
+      await api.cancel(b.id);
+      setConfirming(false);
+      await onCancelled();
     } catch (err) {
       const e = err as ApiError;
       setError(
@@ -60,85 +59,168 @@ export function MyBookings() {
           ? 'This booking can’t be cancelled: the show has already started.'
           : e.message,
       );
+    } finally {
+      setBusy(false);
     }
   };
 
   return (
-    <div>
-      <h1 className="font-display mb-8 text-3xl font-bold tracking-tight">My bookings</h1>
-      {error && (
-        <div className="mb-4">
-          <Notice tone="error">{error}</Notice>
-        </div>
-      )}
-      {bookings?.length === 0 && (
-        <Notice>
-          No bookings yet.{' '}
-          <Link to="/" className="font-semibold underline underline-offset-4">
-            Find a show
-          </Link>
-        </Notice>
-      )}
-      <ul className="space-y-3">
-        {bookings?.map((b) => {
-          const status = describe(b, now);
-          const live =
-            b.status === 'PENDING' && !b.payment && new Date(b.expiresAt).getTime() > now;
-          const cancellable = b.status === 'CONFIRMED' && new Date(b.show.startsAt).getTime() > now;
-          return (
-            <li key={b.id} className="rounded-lg border border-rule bg-card px-5 py-4">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <div className="font-display text-lg font-semibold">{b.show.movie.title}</div>
-                  <div className="text-sm text-ink-soft">
-                    {venueOf(b.show)} · {formatWhen(b.show.startsAt)}
-                  </div>
-                  <div className="mt-2 font-mono text-sm">
-                    {b.seats.join(' · ')}{' '}
-                    <span className="text-ink-soft">· {formatMoney(b.totalAmount)}</span>
-                  </div>
-                </div>
-                <span
-                  className={`rounded-full px-3 py-1 text-xs font-semibold ${TONE[status.tone]}`}
-                >
-                  {status.text}
-                </span>
+    <li className="animate-rise rounded-2xl border border-line bg-night-2/60 p-4 sm:p-5">
+      <div className="flex gap-4">
+        <Link to={`/movies/${b.show.movie.slug}`} className="shrink-0">
+          <Poster
+            url={b.show.movie.posterUrl}
+            title={b.show.movie.title}
+            size="w185"
+            className="w-16 rounded-lg sm:w-20"
+          />
+        </Link>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div className="min-w-0">
+              <h3 className="font-display truncate text-2xl leading-tight font-extrabold tracking-wide uppercase">
+                {b.show.movie.title}
+              </h3>
+              <div className="text-sm text-dim">{formatWhen(b.show.startsAt)}</div>
+              <div className="truncate text-sm text-faint">
+                {b.show.theatre.name}, {b.show.theatre.city} · {b.show.screen.name}
               </div>
+            </div>
+            <StatusPill
+              pill={
+                held ? { label: `Held · ${formatCountdown(secondsLeft)} left`, tone: 'mine' } : pill
+              }
+            />
+          </div>
+          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+            <span className="font-mono font-semibold">
+              {[...b.seats].sort(seatOrder).join(', ')}
+            </span>
+            <span className="text-dim">{formatMoney(b.totalAmount)}</span>
+            <span className="font-mono text-xs text-faint">#{bookingRef(b.id)}</span>
+          </div>
 
-              {(live || cancellable) && (
-                <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-dashed border-rule pt-4">
-                  {live && (
-                    <Link
-                      to={`/checkout/${b.id}`}
-                      className="text-sm font-semibold underline underline-offset-4"
-                    >
-                      Continue to payment
-                    </Link>
-                  )}
-                  {cancellable &&
-                    (confirming === b.id ? (
-                      <>
-                        <span className="text-sm">
-                          Cancel and refund {formatMoney(b.totalAmount)}?
-                        </span>
-                        <Button variant="danger" onClick={() => cancel(b.id)}>
-                          Cancel booking
-                        </Button>
-                        <Button variant="quiet" onClick={() => setConfirming(null)}>
-                          Keep it
-                        </Button>
-                      </>
-                    ) : (
-                      <Button variant="secondary" onClick={() => setConfirming(b.id)}>
-                        Cancel booking
-                      </Button>
-                    ))}
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            {b.status === 'CONFIRMED' && (
+              <ButtonLink to={`/bookings/${b.id}`} className="px-4 py-2">
+                View ticket
+              </ButtonLink>
+            )}
+            {(held || b.payment?.status === 'INITIATED') && (
+              <ButtonLink to={`/checkout/${b.id}`} className="px-4 py-2">
+                {held ? 'Continue to payment' : 'View payment'}
+              </ButtonLink>
+            )}
+            {cancellable &&
+              (confirming ? (
+                <div className="flex flex-wrap items-center gap-2 rounded-full border border-bad/40 bg-bad/5 py-1 pr-1 pl-4 text-sm">
+                  <span className="text-dim">
+                    Cancel and refund{' '}
+                    <span className="font-semibold text-screen">{formatMoney(b.totalAmount)}</span>?
+                  </span>
+                  <Button variant="danger" onClick={cancel} disabled={busy} className="px-4 py-1.5">
+                    {busy ? 'Cancelling…' : 'Yes, cancel'}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    onClick={() => setConfirming(false)}
+                    className="px-3 py-1.5"
+                  >
+                    Keep it
+                  </Button>
                 </div>
-              )}
-            </li>
-          );
-        })}
-      </ul>
+              ) : (
+                <Button variant="ghost" onClick={() => setConfirming(true)} className="px-3 py-2">
+                  Cancel booking
+                </Button>
+              ))}
+          </div>
+          {error && (
+            <Notice tone="error" className="mt-3">
+              {error}
+            </Notice>
+          )}
+        </div>
+      </div>
+    </li>
+  );
+}
+
+export function MyBookings() {
+  useTitle('My bookings');
+  const now = useNow();
+  const [bookings, setBookings] = useState<Booking[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [tab, setTab] = useState<Tab>('upcoming');
+
+  const refresh = async () => {
+    try {
+      const { bookings } = await api.myBookings();
+      setBookings(bookings);
+      setError(null);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+  // Refunds and late payments settle in the background; keep the list current
+  usePolling(refresh, 3000);
+
+  const upcoming = bookings?.filter((b) => isUpcoming(b, now)) ?? [];
+  const past = bookings?.filter((b) => !isUpcoming(b, now)) ?? [];
+  const list = tab === 'upcoming' ? upcoming : past;
+
+  return (
+    <div className="mx-auto max-w-4xl px-4 pt-12 sm:px-6">
+      <Eyebrow>Your account</Eyebrow>
+      <h1 className="font-display mt-1 text-5xl font-black tracking-wide uppercase">My bookings</h1>
+
+      <div className="mt-8 inline-flex rounded-full border border-line-2 p-1" role="tablist">
+        {(
+          [
+            ['upcoming', `Upcoming${bookings ? ` · ${upcoming.length}` : ''}`],
+            ['past', `Past & cancelled${bookings ? ` · ${past.length}` : ''}`],
+          ] as const
+        ).map(([key, label]) => (
+          <button
+            key={key}
+            type="button"
+            role="tab"
+            aria-selected={tab === key}
+            onClick={() => setTab(key)}
+            className={`rounded-full px-4 py-1.5 text-sm font-semibold transition-colors ${
+              tab === key ? 'bg-screen text-night' : 'text-dim hover:text-screen'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      <div className="mt-6">
+        {error && <Notice tone="error">{error}</Notice>}
+        {!bookings && !error && (
+          <div className="space-y-4">
+            {[0, 1].map((i) => (
+              <Skeleton key={i} className="h-36 rounded-2xl" />
+            ))}
+          </div>
+        )}
+        {bookings && list.length === 0 && (
+          <EmptyState
+            title={tab === 'upcoming' ? 'No upcoming shows' : 'Nothing here yet'}
+            action={<ButtonLink to="/movies">Find a film</ButtonLink>}
+          >
+            {tab === 'upcoming'
+              ? 'Tickets you book appear here, ready to show at the entrance.'
+              : 'Past, cancelled and expired bookings appear here.'}
+          </EmptyState>
+        )}
+        <ul className="space-y-4">
+          {list.map((b) => (
+            <BookingCard key={b.id} booking={b} now={now} onCancelled={refresh} />
+          ))}
+        </ul>
+      </div>
     </div>
   );
 }

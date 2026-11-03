@@ -15,16 +15,54 @@ export interface Price {
   price: number;
 }
 
-export interface Show {
+export interface MovieSummary {
+  id: string;
+  slug: string;
+  title: string;
+  genres: string[];
+  language: string;
+  durationMinutes: number;
+  certificate: 'U' | 'UA' | 'A';
+  rating: number | null;
+  posterUrl: string | null;
+  backdropUrl: string | null;
+  releaseDate: string;
+}
+
+export interface MovieListItem extends MovieSummary {
+  nowShowing: boolean;
+  nextShowAt: string | null;
+  showCount: number;
+  minPrice: number | null;
+}
+
+export interface MovieDetail extends MovieSummary {
+  synopsis: string;
+  director: string;
+  cast: string[];
+}
+
+export interface Theatre {
+  id: string;
+  name: string;
+  city: string;
+  address: string;
+}
+
+export interface Showtime {
   id: string;
   startsAt: string;
   endsAt: string;
-  movie: { id: string; slug: string; title: string; posterUrl: string | null };
-  theatre: { id: string; name: string; city: string; address: string };
   screen: { id: string; name: string };
   prices: Price[];
   totalSeats: number;
   availableSeats: number;
+}
+
+export interface Show extends Showtime {
+  movieId: string;
+  movie: MovieSummary;
+  theatre: Theatre;
 }
 
 export interface LayoutRow {
@@ -40,10 +78,6 @@ export interface SeatMap {
   seats: { label: string; status: SeatStatus; category: string }[];
 }
 
-/** "Aurora Multiplex, Hyderabad · Audi 1" */
-export const venueOf = (s: { theatre: { name: string; city: string }; screen: { name: string } }) =>
-  `${s.theatre.name}, ${s.theatre.city} · ${s.screen.name}`;
-
 export interface Booking {
   id: string;
   status: BookingStatus;
@@ -55,7 +89,15 @@ export interface Booking {
   show: {
     id: string;
     startsAt: string;
-    movie: { id: string; slug: string; title: string; posterUrl: string | null };
+    movie: {
+      id: string;
+      slug: string;
+      title: string;
+      posterUrl: string | null;
+      certificate: string;
+      language: string;
+      durationMinutes: number;
+    };
     theatre: { name: string; city: string; address: string };
     screen: { name: string };
   };
@@ -121,6 +163,13 @@ async function request<T>(
   return data as T;
 }
 
+const query = (params: Record<string, string | undefined>) => {
+  const q = new URLSearchParams(
+    Object.entries(params).filter((e): e is [string, string] => Boolean(e[1])),
+  ).toString();
+  return q ? `?${q}` : '';
+};
+
 export const api = {
   register: (name: string, email: string, password: string) =>
     request<{ user: User; token: string }>('POST', '/auth/register', {
@@ -130,7 +179,21 @@ export const api = {
     request<{ user: User; token: string }>('POST', '/auth/login', { body: { email, password } }),
   me: () => request<{ user: User }>('GET', '/auth/me'),
 
-  shows: () => request<{ shows: Show[] }>('GET', '/shows'),
+  cities: () => request<{ cities: { city: string; theatres: number }[] }>('GET', '/cities'),
+  movies: (f: { city?: string; genre?: string; language?: string; q?: string }) =>
+    request<{ movies: MovieListItem[]; facets: { genres: string[]; languages: string[] } }>(
+      'GET',
+      `/movies${query(f)}`,
+    ),
+  movie: (slug: string) => request<{ movie: MovieDetail }>('GET', `/movies/${slug}`),
+  showtimes: (slug: string, f: { city?: string; date?: string }) =>
+    request<{
+      movie: MovieSummary;
+      date: string | null;
+      dates: string[];
+      timezone: string;
+      theatres: { theatre: Theatre; shows: Showtime[] }[];
+    }>('GET', `/movies/${slug}/showtimes${query(f)}`),
   show: (id: string) => request<{ show: Show }>('GET', `/shows/${id}`),
   seatMap: (id: string) => request<SeatMap>('GET', `/shows/${id}/seats`),
 

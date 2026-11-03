@@ -1,43 +1,128 @@
-import type { ReactNode } from 'react';
-import { venueOf, type Booking } from '../lib/api';
-import { formatMoney, formatWhen } from '../lib/format';
-import { Label } from './ui';
+import QRCode from 'qrcode';
+import { useEffect, useState } from 'react';
+import type { Booking } from '../lib/api';
+import {
+  bookingRef,
+  categoryName,
+  formatLongDay,
+  formatMoney,
+  formatTime,
+  seatOrder,
+} from '../lib/format';
+import { Poster } from './Poster';
+
+/** What the QR code says: enough for an usher's scanner to look the booking up. */
+const qrPayload = (b: Booking) => `SEATLOCK:${b.id}:${b.seats.join(',')}`;
+
+function QrCode({ text }: { text: string }) {
+  const [svg, setSvg] = useState<string | null>(null);
+  useEffect(() => {
+    QRCode.toString(text, {
+      type: 'svg',
+      margin: 0,
+      errorCorrectionLevel: 'M',
+      color: { dark: '#231b14', light: '#00000000' },
+    })
+      .then(setSvg)
+      .catch(() => setSvg(null));
+  }, [text]);
+  return (
+    <div
+      className="h-28 w-28 shrink-0 sm:h-32 sm:w-32"
+      role="img"
+      aria-label="Ticket QR code"
+      // Generated locally by the qrcode library from our own booking data
+      dangerouslySetInnerHTML={svg ? { __html: svg } : undefined}
+    />
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <div className="font-mono text-[10px] tracking-[0.18em] text-ink-soft uppercase">{label}</div>
+      <div className="mt-0.5 font-semibold">{children}</div>
+    </div>
+  );
+}
 
 /**
- * A ticket: the booking on the left, a stub on the right, joined by a perforated edge.
- * The stub holds whatever matters most right now (the countdown, or the outcome).
+ * The confirmed ticket, printed on cream stock: the only light object on the dark site.
+ * A perforated tear line separates the admission details from the QR stub.
  */
-export function Ticket({ booking, stub }: { booking: Booking; stub: ReactNode }) {
+export function Ticket({ booking }: { booking: Booking }) {
+  const { show } = booking;
+  const seats = [...booking.seats].sort(seatOrder);
+  const categories = [...new Set(booking.items.map((i) => categoryName(i.category)))];
   return (
-    <div className="flex flex-col overflow-hidden rounded-xl border border-rule bg-card shadow-[0_1px_0_0_var(--color-rule)] sm:flex-row">
-      <div className="flex-1 p-6">
-        <Label>{venueOf(booking.show)}</Label>
-        <h1 className="font-display mt-1 text-2xl font-bold tracking-tight">
-          {booking.show.movie.title}
-        </h1>
-        <p className="text-sm text-ink-soft">{formatWhen(booking.show.startsAt)}</p>
-        <div className="mt-6 flex flex-wrap gap-2">
-          {booking.seats.map((s) => (
-            <span
-              key={s}
-              className="rounded border border-ink/20 px-2 py-1 font-mono text-sm font-medium"
-            >
-              {s}
-            </span>
-          ))}
+    <article
+      className="ticket-paper relative mx-auto max-w-md overflow-hidden rounded-3xl shadow-[0_30px_80px_-20px_rgb(0_0_0/0.8)]"
+      aria-label={`Ticket for ${show.movie.title}`}
+    >
+      <div className="flex items-center justify-between bg-ink px-6 py-2.5 text-cream">
+        <span className="font-display text-lg font-black tracking-widest uppercase">
+          Seat<span className="text-marigold">Lock</span>
+        </span>
+        <span className="font-mono text-[10px] tracking-[0.2em] uppercase">
+          Admit {seats.length}
+        </span>
+      </div>
+
+      <div className="p-6">
+        <div className="flex gap-4">
+          <Poster
+            url={show.movie.posterUrl}
+            title={show.movie.title}
+            size="w185"
+            className="w-20 shrink-0 rounded-lg ring-ink/10"
+          />
+          <div className="min-w-0">
+            <h2 className="font-display text-3xl leading-[0.95] font-black tracking-wide uppercase">
+              {show.movie.title}
+            </h2>
+            <div className="mt-2 text-xs text-ink-soft">
+              {show.movie.certificate === 'UA' ? 'U/A' : show.movie.certificate} ·{' '}
+              {show.movie.language}
+            </div>
+          </div>
         </div>
-        <div className="mt-6 flex items-baseline justify-between border-t border-dashed border-rule pt-4">
-          <Label>Total</Label>
-          <span className="font-mono text-xl font-semibold">
-            {formatMoney(booking.totalAmount)}
-          </span>
+
+        <div className="mt-6 grid grid-cols-2 gap-x-6 gap-y-4 text-sm">
+          <Field label="Date">{formatLongDay(show.startsAt)}</Field>
+          <Field label="Time">{formatTime(show.startsAt)}</Field>
+          <Field label="Theatre">
+            {show.theatre.name}
+            <div className="text-xs font-normal text-ink-soft">{show.theatre.city}</div>
+          </Field>
+          <Field label="Screen">{show.screen.name}</Field>
+          <Field label={`Seats · ${categories.join(', ')}`}>
+            <span className="font-mono text-base">{seats.join('  ')}</span>
+          </Field>
+          <Field label="Paid">{formatMoney(booking.totalAmount)}</Field>
         </div>
       </div>
-      <div
-        className="perforation hidden w-4 shrink-0 border-l border-dashed border-rule sm:block"
-        aria-hidden="true"
-      />
-      <div className="border-t border-dashed border-rule p-6 sm:w-56 sm:border-t-0">{stub}</div>
-    </div>
+
+      {/* Tear line, with notches punched out of both edges */}
+      <div className="relative h-6">
+        <div className="absolute top-1/2 -left-3 h-6 w-6 -translate-y-1/2 rounded-full bg-night" />
+        <div className="absolute top-1/2 -right-3 h-6 w-6 -translate-y-1/2 rounded-full bg-night" />
+        <div className="absolute inset-x-6 top-1/2 border-t-2 border-dashed border-ink/20" />
+      </div>
+
+      <div className="flex items-center gap-5 p-6 pt-3">
+        <QrCode text={qrPayload(booking)} />
+        <div className="min-w-0">
+          <div className="font-mono text-[10px] tracking-[0.18em] text-ink-soft uppercase">
+            Booking ID
+          </div>
+          <div className="font-mono text-2xl font-semibold tracking-wider">
+            {bookingRef(booking.id)}
+          </div>
+          <p className="mt-2 text-xs leading-relaxed text-ink-soft">
+            Show this code at the entrance. Arrive 15 minutes early.
+          </p>
+        </div>
+      </div>
+    </article>
   );
 }

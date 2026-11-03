@@ -1,23 +1,59 @@
 import { useState, type FormEvent } from 'react';
-import { Navigate, useSearchParams } from 'react-router';
-import { Button, Notice } from '../components/ui';
-import { ApiError } from '../lib/api';
+import { Link, Navigate, useSearchParams } from 'react-router';
+import { Logo } from '../components/Layout';
+import { tmdbSize } from '../components/Poster';
+import { Button, Notice, Spinner } from '../components/ui';
+import { api, ApiError } from '../lib/api';
 import { useAuth } from '../lib/auth';
+import { useLoad, useTitle } from '../lib/hooks';
 
 const field =
-  'w-full rounded-md border border-rule bg-card px-3 py-2.5 text-sm text-ink outline-none placeholder:text-ink-soft/60 focus:border-ink';
+  'w-full rounded-xl border border-line-2 bg-night-2 px-4 py-3 text-sm text-screen outline-none transition-colors placeholder:text-faint focus:border-marigold';
+
+/** A slowly drifting wall of posters behind the form. */
+function PosterWall() {
+  const { data } = useLoad(() => api.movies({}), []);
+  const posters = (data?.movies ?? [])
+    .map((m) => tmdbSize(m.posterUrl, 'w185'))
+    .filter(Boolean) as string[];
+  if (posters.length === 0) return null;
+  const wall = [...posters, ...posters, ...posters].slice(0, 36);
+  return (
+    <div className="absolute inset-0 -z-10 overflow-hidden" aria-hidden="true">
+      <div className="grid -rotate-6 scale-125 grid-cols-4 gap-3 opacity-40 sm:grid-cols-6">
+        {wall.map((src, i) => (
+          <img
+            key={i}
+            src={src}
+            alt=""
+            className="aspect-[2/3] w-full rounded-lg object-cover"
+            loading="lazy"
+          />
+        ))}
+      </div>
+      <div className="absolute inset-0 bg-gradient-to-r from-night via-night/90 to-night/50" />
+      <div className="absolute inset-0 bg-gradient-to-t from-night via-transparent to-night/60" />
+    </div>
+  );
+}
 
 export function SignIn() {
   const { user, signIn, signUp } = useAuth();
   const [params] = useSearchParams();
-  const [mode, setMode] = useState<'signin' | 'signup'>('signin');
+  const [mode, setMode] = useState<'signin' | 'signup'>(
+    params.get('mode') === 'signup' ? 'signup' : 'signin',
+  );
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  useTitle(mode === 'signin' ? 'Sign in' : 'Create account');
 
-  if (user) return <Navigate to={params.get('next') ?? '/'} replace />;
+  const next = params.get('next');
+  // Only same-site paths, so a crafted link can't bounce someone to another site after sign-in
+  const safeNext = next && next.startsWith('/') && !next.startsWith('//') ? next : '/';
+  if (user) return <Navigate to={safeNext} replace />;
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -33,7 +69,11 @@ export function SignIn() {
           ? 'An account with this email already exists. Sign in instead.'
           : e.code === 'VALIDATION_ERROR'
             ? 'Check the details: a valid email and a password of at least 8 characters.'
-            : e.message,
+            : e.code === 'UNAUTHENTICATED'
+              ? 'That email and password don’t match.'
+              : e.code === 'RATE_LIMITED'
+                ? 'Too many attempts. Wait a minute, then try again.'
+                : e.message,
       );
     } finally {
       setBusy(false);
@@ -41,68 +81,98 @@ export function SignIn() {
   };
 
   return (
-    <div className="grid min-h-screen place-items-center px-5">
-      <div className="w-full max-w-sm">
-        <div className="font-display mb-1 text-3xl font-bold tracking-tight">
-          Seat<span className="text-marigold-deep">Lock</span>
-        </div>
-        <p className="mb-8 text-sm text-ink-soft">
-          Pick your seats. Nobody else can take them while you pay.
-        </p>
+    <div className="grain relative isolate flex min-h-screen flex-col">
+      <PosterWall />
+      <div className="px-6 py-6 sm:px-10">
+        <Logo />
+      </div>
+      <div className="flex flex-1 items-center px-6 pb-16 sm:px-10">
+        <div className="w-full max-w-sm animate-rise">
+          <h1 className="font-display text-6xl leading-[0.85] font-black tracking-wide uppercase">
+            {mode === 'signin' ? (
+              <>
+                Welcome
+                <br />
+                back
+              </>
+            ) : (
+              <>
+                Grab
+                <br />a seat
+              </>
+            )}
+          </h1>
+          <p className="mt-4 mb-8 text-dim">
+            {next?.startsWith('/shows/')
+              ? 'Sign in to hold your seats. Your picks are saved.'
+              : 'Pick your seats. Nobody else can take them while you pay.'}
+          </p>
 
-        <form onSubmit={submit} className="space-y-4" noValidate>
-          {mode === 'signup' && (
+          <form onSubmit={submit} className="space-y-4" noValidate>
+            {mode === 'signup' && (
+              <label className="block space-y-1.5">
+                <span className="text-sm font-medium text-dim">Name</span>
+                <input
+                  className={field}
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  autoComplete="name"
+                  required
+                />
+              </label>
+            )}
             <label className="block space-y-1.5">
-              <span className="text-sm font-medium">Name</span>
+              <span className="text-sm font-medium text-dim">Email</span>
               <input
                 className={field}
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                autoComplete="name"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                autoComplete="email"
                 required
               />
             </label>
-          )}
-          <label className="block space-y-1.5">
-            <span className="text-sm font-medium">Email</span>
-            <input
-              className={field}
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              autoComplete="email"
-              required
-            />
-          </label>
-          <label className="block space-y-1.5">
-            <span className="text-sm font-medium">Password</span>
-            <input
-              className={field}
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
-              required
-            />
-          </label>
-          {error && <Notice tone="error">{error}</Notice>}
-          <Button type="submit" disabled={busy} className="w-full">
-            {mode === 'signin' ? 'Sign in' : 'Create account'}
-          </Button>
-        </form>
+            <label className="block space-y-1.5">
+              <span className="text-sm font-medium text-dim">Password</span>
+              <input
+                className={field}
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
+                minLength={8}
+                required
+              />
+              {mode === 'signup' && (
+                <span className="text-xs text-faint">At least 8 characters</span>
+              )}
+            </label>
+            {error && <Notice tone="error">{error}</Notice>}
+            <Button type="submit" disabled={busy} className="w-full py-3 text-base">
+              {busy && <Spinner />}
+              {mode === 'signin' ? 'Sign in' : 'Create account'}
+            </Button>
+          </form>
 
-        <p className="mt-6 text-center text-sm text-ink-soft">
-          {mode === 'signin' ? 'New here?' : 'Already have an account?'}{' '}
-          <button
-            className="font-medium text-ink underline underline-offset-4"
-            onClick={() => {
-              setMode(mode === 'signin' ? 'signup' : 'signin');
-              setError(null);
-            }}
-          >
-            {mode === 'signin' ? 'Create an account' : 'Sign in'}
-          </button>
-        </p>
+          <p className="mt-6 text-sm text-dim">
+            {mode === 'signin' ? 'New here? ' : 'Already have an account? '}
+            <button
+              type="button"
+              onClick={() => {
+                setMode(mode === 'signin' ? 'signup' : 'signin');
+                setError(null);
+              }}
+              className="font-semibold text-marigold-hi underline-offset-4 hover:underline"
+            >
+              {mode === 'signin' ? 'Create an account' : 'Sign in'}
+            </button>
+          </p>
+          <p className="mt-10 text-xs text-faint">
+            <Link to="/" className="hover:text-dim">
+              ← Keep browsing without signing in
+            </Link>
+          </p>
+        </div>
       </div>
     </div>
   );
