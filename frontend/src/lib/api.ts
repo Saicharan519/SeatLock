@@ -9,14 +9,40 @@ export interface User {
   role: 'USER' | 'ADMIN';
 }
 
+export interface Price {
+  category: string;
+  /** paise */
+  price: number;
+}
+
 export interface Show {
   id: string;
-  title: string;
-  description: string;
-  venue: string;
   startsAt: string;
-  pricePerSeat: number;
+  endsAt: string;
+  movie: { id: string; slug: string; title: string; posterUrl: string | null };
+  theatre: { id: string; name: string; city: string; address: string };
+  screen: { id: string; name: string };
+  prices: Price[];
+  totalSeats: number;
+  availableSeats: number;
 }
+
+export interface LayoutRow {
+  label: string;
+  category: string;
+  seats: number;
+  aisleAfter: number[];
+}
+
+export interface SeatMap {
+  layout: { rows: LayoutRow[] };
+  prices: Price[];
+  seats: { label: string; status: SeatStatus; category: string }[];
+}
+
+/** "Aurora Multiplex, Hyderabad · Audi 1" */
+export const venueOf = (s: { theatre: { name: string; city: string }; screen: { name: string } }) =>
+  `${s.theatre.name}, ${s.theatre.city} · ${s.screen.name}`;
 
 export interface Booking {
   id: string;
@@ -25,7 +51,14 @@ export interface Booking {
   expiresAt: string;
   createdAt: string;
   seats: string[];
-  show: { id: string; title: string; venue: string; startsAt: string };
+  items: { label: string; category: string; price: number }[];
+  show: {
+    id: string;
+    startsAt: string;
+    movie: { id: string; slug: string; title: string; posterUrl: string | null };
+    theatre: { name: string; city: string; address: string };
+    screen: { name: string };
+  };
   payment: { id: string; status: PaymentStatus } | null;
 }
 
@@ -99,8 +132,7 @@ export const api = {
 
   shows: () => request<{ shows: Show[] }>('GET', '/shows'),
   show: (id: string) => request<{ show: Show }>('GET', `/shows/${id}`),
-  seatMap: (id: string) =>
-    request<{ seats: { label: string; status: SeatStatus }[] }>('GET', `/shows/${id}/seats`),
+  seatMap: (id: string) => request<SeatMap>('GET', `/shows/${id}/seats`),
 
   hold: (showId: string, seats: string[], idempotencyKey: string) =>
     request<{ bookingId: string; expiresAt: string; totalAmount: number }>('POST', '/holds', {

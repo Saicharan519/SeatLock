@@ -1,5 +1,6 @@
 import type { Pool } from 'pg';
 import { createTestPool, resetDatabase } from '../helpers/db';
+import { createShow } from '../helpers/factories';
 
 /**
  * The database must refuse corruption even if application code has a bug.
@@ -23,16 +24,9 @@ describe('database safety nets', () => {
         `INSERT INTO users (name, email, password_hash) VALUES ('U', 'u@test.local', 'x') RETURNING id`,
       )
     ).rows[0]);
-    ({ id: showId } = (
-      await pool.query(
-        `INSERT INTO shows (title, venue, starts_at, price_per_seat)
-         VALUES ('Show', 'Hall', now() + interval '1 day', 20000) RETURNING id`,
-      )
-    ).rows[0]);
+    showId = await createShow(pool);
     ({ id: seatId } = (
-      await pool.query(`INSERT INTO seats (show_id, seat_label) VALUES ($1, 'A1') RETURNING id`, [
-        showId,
-      ])
+      await pool.query(`SELECT id FROM seats WHERE show_id = $1 AND seat_label = 'A1'`, [showId])
     ).rows[0]);
   });
 
@@ -118,7 +112,43 @@ describe('database safety nets', () => {
 
   test('rejects a duplicate seat label within a show', async () => {
     await expect(
-      pool.query(`INSERT INTO seats (show_id, seat_label) VALUES ($1, 'A1')`, [showId]),
+      pool.query(
+        `INSERT INTO seats (show_id, seat_label, category) VALUES ($1, 'A1', 'STANDARD')`,
+        [showId],
+      ),
     ).rejects.toMatchObject({ code: '23505', constraint: 'seats_show_label' });
+  });
+
+  test('rejects a seat whose category has no price for its show', async () => {
+    await expect(
+      pool.query(
+        `INSERT INTO seats (show_id, seat_label, category) VALUES ($1, 'Z1', 'RECLINER')`,
+        [showId],
+      ),
+    ).rejects.toMatchObject({ code: '23503', constraint: 'seats_category_priced' });
+  });
+
+  test('rejects two overlapping shows on one screen, allows back-to-back', async () => {
+    const { rows } = await pool.query(
+      `SELECT movie_id, screen_id, starts_at, ends_at FROM shows WHERE id = $1`,
+      [showId],
+    );
+    const s = rows[0];
+    const insert = (startsAt: Date, endsAt: Date) =>
+      pool.query(
+        `INSERT INTO shows (movie_id, screen_id, starts_at, ends_at) VALUES ($1, $2, $3, $4)`,
+        [s.movie_id, s.screen_id, startsAt, endsAt],
+      );
+    const minute = 60_000;
+    const end = new Date(s.ends_at).getTime();
+    // Starts 1 minute before the existing show ends: overlaps
+    await expect(
+      insert(new Date(end - minute), new Date(end + 120 * minute)),
+    ).rejects.toMatchObject({
+      code: '23P01',
+      constraint: 'shows_no_overlap_per_screen',
+    });
+    // Starts exactly when it ends: the ranges are half-open, so this is fine
+    await expect(insert(new Date(end), new Date(end + 120 * minute))).resolves.toBeDefined();
   });
 });

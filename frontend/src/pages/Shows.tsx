@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { Label, Notice } from '../components/ui';
-import { api, type Show } from '../lib/api';
+import { api, venueOf, type Show } from '../lib/api';
 import { formatMoney } from '../lib/format';
 
 const day = new Intl.DateTimeFormat('en-IN', { day: 'numeric' });
@@ -49,14 +49,16 @@ export function Shows() {
                 </div>
                 <div className="flex flex-1 flex-wrap items-center justify-between gap-4 px-5 py-4">
                   <div>
-                    <div className="font-display text-lg font-semibold">{s.title}</div>
+                    <div className="font-display text-lg font-semibold">{s.movie.title}</div>
                     <div className="text-sm text-ink-soft">
-                      {s.venue} · {time.format(at)}
+                      {venueOf(s)} · {time.format(at)}
                     </div>
                   </div>
                   <div className="text-right">
-                    <Label>Per seat</Label>
-                    <div className="font-mono font-medium">{formatMoney(s.pricePerSeat)}</div>
+                    <Label>From</Label>
+                    <div className="font-mono font-medium">
+                      {formatMoney(Math.min(...s.prices.map((p) => p.price)))}
+                    </div>
                   </div>
                 </div>
                 <div className="flex items-center bg-ink px-4 text-sm font-semibold text-paper transition-colors group-hover:bg-booked">

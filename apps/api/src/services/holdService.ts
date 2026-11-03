@@ -54,6 +54,8 @@ export function createHoldService(pool: Pool, config: ApiConfig) {
           throw new AppError('VALIDATION_ERROR', `Unknown seats: ${unknown.join(', ')}`);
         }
         const requestedIds = seats.map((s) => s.id);
+        // Each seat at its category price; booking_items keeps these as the price snapshot
+        const totalAmount = seats.reduce((sum, s) => sum + s.price, 0);
 
         // 3. The caller's own PENDING booking for this show (locked: booking comes first, R3)
         const existing = await bookings.lockPendingBookingOfUser(client, userId, input.showId);
@@ -73,7 +75,7 @@ export function createHoldService(pool: Pool, config: ApiConfig) {
           booking = await bookings.insertPendingBooking(client, {
             userId,
             showId: input.showId,
-            totalAmount: show.price_per_seat * requestedIds.length,
+            totalAmount,
             ttlSeconds: config.HOLD_TTL_SECONDS,
           });
         } catch (err) {
@@ -97,15 +99,15 @@ export function createHoldService(pool: Pool, config: ApiConfig) {
           throw new AppError('SEAT_UNAVAILABLE', 'One or more seats are no longer available');
         }
 
-        // 8. Items at the booking-time price, store the response, commit
-        await bookings.insertBookingItems(client, booking.id, requestedIds, show.price_per_seat);
+        // 8. Items at the hold-time price, store the response, commit
+        await bookings.insertBookingItems(client, booking.id, seats);
         const response: StoredResponse = {
           status: 201,
           body: {
             bookingId: booking.id,
             status: 'PENDING',
             seats: seats.map((s) => s.seat_label),
-            totalAmount: show.price_per_seat * requestedIds.length,
+            totalAmount,
             expiresAt: booking.expires_at.toISOString(),
           },
         };

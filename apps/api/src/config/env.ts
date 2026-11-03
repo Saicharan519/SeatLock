@@ -17,6 +17,8 @@ const apiEnvSchema = baseEnvSchema.extend({
   RATE_LIMIT_ENABLED: z.stringbool().default(true),
   RATE_LIMIT_AUTH_PER_MINUTE: z.coerce.number().int().positive().default(10),
   RATE_LIMIT_BOOKING_PER_MINUTE: z.coerce.number().int().positive().default(30),
+  /** The timezone calendar days are counted in ("shows on 4 Nov" means 4 Nov in this zone) */
+  APP_TIMEZONE: z.string().default('Asia/Kolkata'),
   /** Only behind a trusted reverse proxy: makes req.ip come from X-Forwarded-For */
   TRUST_PROXY: z.stringbool().default(false),
 });

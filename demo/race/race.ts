@@ -1,5 +1,5 @@
 import type { Pool } from 'pg';
-import { contendedOrder, insertSeatsForShow, seatLabels, withTransaction } from '@seatlock/db';
+import { contendedOrder, createStandardShow, seatLabels, withTransaction } from '@seatlock/db';
 import type { ApiConfig } from '../../apps/api/src/config/env';
 import { createHoldService } from '../../apps/api/src/services/holdService';
 import { naiveConfirmAll, naiveHold } from './naiveHold';
@@ -17,14 +17,9 @@ export interface RaceResult {
 
 async function freshShowAndUsers(pool: Pool, users: number) {
   const run = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-  const showId = await withTransaction(pool, async (client) => {
-    const { rows } = await client.query<{ id: string }>(
-      `INSERT INTO shows (title, venue, starts_at, price_per_seat)
-       VALUES ('Race demo', 'Demo Hall', now() + interval '1 day', 25000) RETURNING id`,
-    );
-    await insertSeatsForShow(client, rows[0]!.id);
-    return rows[0]!.id;
-  });
+  const showId = await withTransaction(pool, (client) =>
+    createStandardShow(client, { title: 'Race demo', price: 25000 }),
+  );
   const { rows } = await pool.query<{ id: string }>(
     `INSERT INTO users (name, email, password_hash)
      SELECT 'Racer ' || g, 'racer' || g || '-' || $2 || '@demo.test', 'x'

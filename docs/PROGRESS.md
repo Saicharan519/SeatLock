@@ -1,19 +1,21 @@
 # SeatLock progress
 
-Last updated: 2026-11-03, after Phase 11. **v1 (Phases 0–10) complete. v2 in progress** ([prd-v2.md](prd-v2.md)): turning the backend into a full movie-booking product.
+Last updated: 2026-11-03, after Phase 12. **v1 (Phases 0–10) complete. v2 in progress** ([prd-v2.md](prd-v2.md)): turning the backend into a full movie-booking product.
 
 ## v2 phases
 
-| Phase                             | Status  | Commit    | Tests after                          | Write-up                                    |
-| --------------------------------- | ------- | --------- | ------------------------------------ | ------------------------------------------- |
-| 11 Dev workflow and understanding | Done    | `915b9bc` | 103 / 103 (re-run 2026-11-03, 113 s) | [phase-11](phases/phase-11-dev-workflow.md) |
-| 12 Product data model             | Next    |           |                                      |                                             |
-| 13 Frontend rebuild               | Planned |           |                                      |                                             |
-| 13.5 First deployment             | Planned |           |                                      |                                             |
-| 14 Payments v2 (Razorpay + mock)  | Planned |           |                                      |                                             |
-| 15 Admin dashboard                | Planned |           |                                      |                                             |
-| 16 Hardening                      | Planned |           |                                      |                                             |
-| 17 Interview pack                 | Planned |           |                                      |                                             |
+| Phase                             | Status  | Commit        | Tests after                          | Write-up                                    |
+| --------------------------------- | ------- | ------------- | ------------------------------------ | ------------------------------------------- |
+| 11 Dev workflow and understanding | Done    | `915b9bc`     | 103 / 103 (re-run 2026-11-03, 113 s) | [phase-11](phases/phase-11-dev-workflow.md) |
+| 12 Product data model             | Done    | _uncommitted_ | 118 / 118                            | [phase-12](phases/phase-12-data-model.md)   |
+| 13 Frontend rebuild               | Next    |               |                                      |                                             |
+| 13.5 First deployment             | Planned |               |                                      |                                             |
+| 14 Payments v2 (Razorpay + mock)  | Planned |               |                                      |                                             |
+| 15 Admin dashboard                | Planned |               |                                      |                                             |
+| 16 Hardening                      | Planned |               |                                      |                                             |
+| 17 Interview pack                 | Planned |               |                                      |                                             |
+
+**Tests since v2:** 118 in 20 files. Phase 12 added catalog.test.ts (14) and seed.test.ts (2), added 2 schema tests, and moved the 3 admin-show tests from shows.test.ts into catalog.test.ts (rewritten for the new model). No test was deleted.
 
 ## v1 phases
 

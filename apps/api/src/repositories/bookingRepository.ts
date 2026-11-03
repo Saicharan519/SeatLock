@@ -5,7 +5,6 @@ export type BookingStatus = 'PENDING' | 'CONFIRMED' | 'CANCELLED' | 'EXPIRED' | 
 
 export interface ShowForHold {
   id: string;
-  price_per_seat: number;
   upcoming: boolean;
 }
 
@@ -15,20 +14,27 @@ export async function findShowForHold(
   showId: string,
 ): Promise<ShowForHold | undefined> {
   const { rows } = await client.query<ShowForHold>(
-    `SELECT id, price_per_seat, starts_at > now() AS upcoming FROM shows WHERE id = $1`,
+    `SELECT id, starts_at > now() AS upcoming FROM shows WHERE id = $1`,
     [showId],
   );
   return rows[0];
 }
 
-/** Seat ids for the given labels, in ascending id order. Unlocked read. */
+/**
+ * Seats for the given labels with their current category price, in ascending id order.
+ * Unlocked read. The price read here is what booking_items stores (the price snapshot).
+ */
 export async function findSeatsByLabels(
   client: PoolClient,
   showId: string,
   labels: string[],
-): Promise<{ id: string; seat_label: string }[]> {
-  const { rows } = await client.query<{ id: string; seat_label: string }>(
-    `SELECT id, seat_label FROM seats WHERE show_id = $1 AND seat_label = ANY($2::text[]) ORDER BY id`,
+): Promise<{ id: string; seat_label: string; price: number }[]> {
+  const { rows } = await client.query<{ id: string; seat_label: string; price: number }>(
+    `SELECT s.id, s.seat_label, p.price
+     FROM seats s
+     JOIN show_prices p ON p.show_id = s.show_id AND p.category = s.category
+     WHERE s.show_id = $1 AND s.seat_label = ANY($2::text[])
+     ORDER BY s.id`,
     [showId, labels],
   );
   return rows;
@@ -107,16 +113,16 @@ export async function claimSeats(
   return rowCount ?? 0;
 }
 
+/** One item per seat, each at the price it had when the hold was made. */
 export async function insertBookingItems(
   client: PoolClient,
   bookingId: string,
-  seatIds: string[],
-  price: number,
+  seats: { id: string; price: number }[],
 ): Promise<void> {
   await client.query(
     `INSERT INTO booking_items (booking_id, seat_id, price)
-     SELECT $1, seat_id, $3 FROM unnest($2::bigint[]) AS seat_id`,
-    [bookingId, seatIds, price],
+     SELECT $1, seat_id, price FROM unnest($2::bigint[], $3::int[]) AS t(seat_id, price)`,
+    [bookingId, seats.map((s) => s.id), seats.map((s) => s.price)],
   );
 }
 

@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import type { Booking } from '../lib/api';
+import { venueOf, type Booking } from '../lib/api';
 import { formatMoney, formatWhen } from '../lib/format';
 import { Label } from './ui';
 
@@ -11,9 +11,9 @@ export function Ticket({ booking, stub }: { booking: Booking; stub: ReactNode })
   return (
     <div className="flex flex-col overflow-hidden rounded-xl border border-rule bg-card shadow-[0_1px_0_0_var(--color-rule)] sm:flex-row">
       <div className="flex-1 p-6">
-        <Label>{booking.show.venue}</Label>
+        <Label>{venueOf(booking.show)}</Label>
         <h1 className="font-display mt-1 text-2xl font-bold tracking-tight">
-          {booking.show.title}
+          {booking.show.movie.title}
         </h1>
         <p className="text-sm text-ink-soft">{formatWhen(booking.show.startsAt)}</p>
         <div className="mt-6 flex flex-wrap gap-2">

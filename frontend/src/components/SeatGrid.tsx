@@ -1,8 +1,4 @@
-import type { SeatStatus } from '../lib/api';
-
-const ROWS = ['A', 'B', 'C', 'D', 'E'];
-const PER_ROW = 10;
-const AISLE_AFTER = 5;
+import type { LayoutRow, SeatStatus } from '../lib/api';
 
 const STATUS_TEXT: Record<SeatStatus | 'SELECTED' | 'MINE', string> = {
   AVAILABLE: 'available',
@@ -18,11 +14,14 @@ const STATUS_TEXT: Record<SeatStatus | 'SELECTED' | 'MINE', string> = {
  * Statuses come from the server and refresh live, so seats change as other people book.
  */
 export function SeatGrid({
+  rows,
   seats,
   selected,
   mine,
   onToggle,
 }: {
+  /** The screen layout: rows, seats per row, aisles, and each row's category */
+  rows: LayoutRow[];
   seats: Map<string, SeatStatus>;
   selected: Set<string>;
   /** Seats in the user's own live hold */
@@ -47,45 +46,58 @@ export function SeatGrid({
         </div>
 
         <div role="group" aria-label="Seats" className="space-y-2.5">
-          {ROWS.map((row) => (
-            <div key={row} className="flex items-center gap-1 sm:gap-2.5">
-              <span className="w-4 text-center font-mono text-xs text-ink-soft" aria-hidden="true">
-                {row}
-              </span>
-              {Array.from({ length: PER_ROW }, (_, i) => {
-                const label = `${row}${i + 1}`;
-                const status = seats.get(label) ?? 'AVAILABLE';
-                const isSelected = selected.has(label);
-                const isMine = status === 'HELD' && mine.has(label);
-                const takeable = status === 'AVAILABLE';
-                const look = isSelected
-                  ? 'bg-marigold text-ink shadow-[inset_0_-3px_0_0_var(--color-marigold-deep)]'
-                  : isMine
-                    ? 'seat-mine text-ink'
-                    : status === 'BOOKED'
-                      ? 'bg-booked text-paper/40'
-                      : status === 'HELD'
-                        ? 'seat-held text-ink/50'
-                        : 'bg-seat text-ink-soft hover:-translate-y-px hover:bg-seat-hover';
-                return (
-                  <button
-                    key={label}
-                    type="button"
-                    onClick={() => onToggle(label)}
-                    disabled={!takeable && !isSelected}
-                    aria-pressed={isSelected}
-                    aria-label={`Seat ${label}, ${STATUS_TEXT[isSelected ? 'SELECTED' : isMine ? 'MINE' : status]}`}
-                    className={`seat grid h-6 w-6 place-items-center rounded-t-md rounded-b-sm font-mono text-[9px] sm:rounded-t-lg sm:text-[10px] disabled:cursor-not-allowed sm:h-9 sm:w-9 ${look} ${
-                      i + 1 === AISLE_AFTER ? 'mr-3 sm:mr-6' : ''
-                    }`}
-                  >
-                    {i + 1}
-                  </button>
-                );
-              })}
-              <span className="w-4 text-center font-mono text-xs text-ink-soft" aria-hidden="true">
-                {row}
-              </span>
+          {rows.map(({ label: row, seats: perRow, aisleAfter, category }, r) => (
+            <div key={row}>
+              {category !== rows[r - 1]?.category && (
+                <div className="mt-4 mb-2 text-center font-mono text-[10px] tracking-[0.25em] text-ink-soft uppercase">
+                  {category.replace(/_/g, ' ')}
+                </div>
+              )}
+              <div className="flex items-center justify-center gap-1 sm:gap-2">
+                <span
+                  className="w-4 text-center font-mono text-xs text-ink-soft"
+                  aria-hidden="true"
+                >
+                  {row}
+                </span>
+                {Array.from({ length: perRow }, (_, i) => {
+                  const label = `${row}${i + 1}`;
+                  const status = seats.get(label) ?? 'AVAILABLE';
+                  const isSelected = selected.has(label);
+                  const isMine = status === 'HELD' && mine.has(label);
+                  const takeable = status === 'AVAILABLE';
+                  const look = isSelected
+                    ? 'bg-marigold text-ink shadow-[inset_0_-3px_0_0_var(--color-marigold-deep)]'
+                    : isMine
+                      ? 'seat-mine text-ink'
+                      : status === 'BOOKED'
+                        ? 'bg-booked text-paper/40'
+                        : status === 'HELD'
+                          ? 'seat-held text-ink/50'
+                          : 'bg-seat text-ink-soft hover:-translate-y-px hover:bg-seat-hover';
+                  return (
+                    <button
+                      key={label}
+                      type="button"
+                      onClick={() => onToggle(label)}
+                      disabled={!takeable && !isSelected}
+                      aria-pressed={isSelected}
+                      aria-label={`Seat ${label}, ${STATUS_TEXT[isSelected ? 'SELECTED' : isMine ? 'MINE' : status]}`}
+                      className={`seat grid h-6 w-6 place-items-center rounded-t-md rounded-b-sm font-mono text-[9px] sm:rounded-t-lg sm:text-[10px] disabled:cursor-not-allowed sm:h-9 sm:w-9 ${look} ${
+                        aisleAfter.includes(i + 1) ? 'mr-3 sm:mr-6' : ''
+                      }`}
+                    >
+                      {i + 1}
+                    </button>
+                  );
+                })}
+                <span
+                  className="w-4 text-center font-mono text-xs text-ink-soft"
+                  aria-hidden="true"
+                >
+                  {row}
+                </span>
+              </div>
             </div>
           ))}
         </div>

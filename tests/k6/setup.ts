@@ -11,7 +11,7 @@
  */
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { createPool, insertSeatsForShow, withTransaction } from '@seatlock/db';
+import { createPool, createStandardShow, withTransaction } from '@seatlock/db';
 import { signToken } from '../../apps/api/src/utils/jwt';
 
 const USERS = 1000;
@@ -31,18 +31,11 @@ async function main() {
   try {
     await pool.query(
       `TRUNCATE notifications, outbox_events, webhook_events, idempotency_keys, payments,
-                booking_items, seats, bookings, shows, users RESTART IDENTITY CASCADE`,
+                booking_items, seats, show_prices, bookings, shows, screens, theatres, movies,
+                users RESTART IDENTITY CASCADE`,
     );
     const createShow = (title: string) =>
-      withTransaction(pool, async (client) => {
-        const { rows } = await client.query<{ id: string }>(
-          `INSERT INTO shows (title, venue, starts_at, price_per_seat)
-           VALUES ($1, 'Load Test Hall', now() + interval '1 day', 25000) RETURNING id`,
-          [title],
-        );
-        await insertSeatsForShow(client, rows[0]!.id);
-        return rows[0]!.id;
-      });
+      withTransaction(pool, (client) => createStandardShow(client, { title, price: 25000 }));
     const spikeShowId = await createShow('Spike (scenario A)');
     const steadyShowId = await createShow('Steady (scenario B)');
 

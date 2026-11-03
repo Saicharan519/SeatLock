@@ -13,8 +13,12 @@ const TABLES = [
   'payments',
   'booking_items',
   'seats',
+  'show_prices',
   'bookings',
   'shows',
+  'screens',
+  'theatres',
+  'movies',
   'users',
 ];
 

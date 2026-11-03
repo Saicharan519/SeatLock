@@ -9,9 +9,9 @@ import {
 import type { ApiConfig } from './config/env';
 import { createAdminController } from './controllers/adminController';
 import { createAuthController } from './controllers/authController';
+import { createCatalogController } from './controllers/catalogController';
 import { createBookingController } from './controllers/bookingController';
 import { createHoldController } from './controllers/holdController';
-import { createShowController } from './controllers/showController';
 import { createWebhookController } from './controllers/webhookController';
 import { requireAuth } from './middleware/auth';
 import { errorHandler, notFound } from './middleware/errorHandler';
@@ -19,17 +19,17 @@ import { rateLimit } from './middleware/rateLimit';
 import { requestLogger } from './middleware/requestLogger';
 import { adminRouter } from './routes/admin';
 import { authRouter } from './routes/auth';
+import { catalogRouter } from './routes/catalog';
 import { bookingsRouter } from './routes/bookings';
 import { healthRouter } from './routes/health';
 import { holdsRouter } from './routes/holds';
-import { showsRouter } from './routes/shows';
 import { webhooksRouter } from './routes/webhooks';
 import { createAuthService } from './services/authService';
+import { createCatalogService } from './services/catalogService';
 import { createBookingService } from './services/bookingService';
 import { createHoldService } from './services/holdService';
 import { createOutboxAdminService } from './services/outboxAdminService';
 import { createPaymentService } from './services/paymentService';
-import { createShowService } from './services/showService';
 import { createWebhookService } from './services/webhookService';
 
 export interface AppDeps {
@@ -67,7 +67,9 @@ export function createApp({ pool, config, logger, gateway, redis = null }: AppDe
   });
 
   const authController = createAuthController(createAuthService(pool, config));
-  const showController = createShowController(createShowService(pool));
+  const catalogController = createCatalogController(
+    createCatalogService(pool, { timezone: config.APP_TIMEZONE }),
+  );
   const holdController = createHoldController(
     createHoldService(pool, config),
     config.MAX_SEATS_PER_HOLD,
@@ -91,7 +93,7 @@ export function createApp({ pool, config, logger, gateway, redis = null }: AppDe
 
   app.use('/api', healthRouter(pool, redis));
   app.use('/api', authRouter(authController, authenticate, limitAuthByIp));
-  app.use('/api', showsRouter(showController, authenticate));
+  app.use('/api', catalogRouter(catalogController, authenticate));
   app.use('/api', holdsRouter(holdController, authenticate, limitBookingByUser));
   app.use('/api', bookingsRouter(bookingController, authenticate, limitBookingByUser));
   app.use('/api', adminRouter(adminController, authenticate));

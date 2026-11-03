@@ -22,9 +22,9 @@ cd SeatLock
 docker compose up --build
 ```
 
-Open **http://localhost:8080**, create an account, pick seats, pay. The first build takes about 1.5 minutes. The first start on an empty database is healthy in about 20 seconds; later starts take about 11.
+Open **http://localhost:8080**, create an account, pick a showtime and seats, pay. The first build takes about 1.5 minutes. The first start on an empty database is healthy in about 20 seconds; later starts take about 11.
 
-`docker compose up` starts seven containers in dependency order: Postgres and Redis, a one-shot job that applies migrations and seeds an admin (`admin@seatlock.local` / `admin12345`) and a sample show, then the API, the worker, the mock payment gateway, and nginx serving the UI and proxying `/api`. The secrets in `docker-compose.yml` are local-demo defaults; override them with environment variables for anything else.
+`docker compose up` starts seven containers in dependency order: Postgres and Redis, a one-shot job that applies migrations and seeds an admin (`admin@seatlock.local` / `admin12345`) and the demo catalogue (14 films, 7 theatres in 4 cities, a week of showtimes from today), then the API, the worker, the mock payment gateway, and nginx serving the UI and proxying `/api`. The secrets in `docker-compose.yml` are local-demo defaults; override them with environment variables for anything else.
 
 ## The bug it prevents
 
@@ -146,6 +146,11 @@ A gateway **timeout** changes nothing: the charge may have gone through, so the 
 
 ```mermaid
 erDiagram
+    movies ||--o{ shows : "screened in"
+    theatres ||--|{ screens : has
+    screens ||--o{ shows : hosts
+    shows ||--|{ show_prices : "prices per category"
+    show_prices ||--o{ seats : "priced by"
     users ||--o{ bookings : makes
     shows ||--o{ seats : has
     shows ||--o{ bookings : for
@@ -157,22 +162,40 @@ erDiagram
     outbox_events ||--o| notifications : produces
     users ||--o{ notifications : receives
 
-    users {
+    movies {
         uuid id PK
-        text email UK
-        text password_hash
-        text role "USER or ADMIN"
+        text slug UK
+        text title
+        text_array genres
+        int duration_minutes
+    }
+    theatres {
+        uuid id PK
+        text name "UNIQUE with city"
+        text city
+    }
+    screens {
+        uuid id PK
+        uuid theatre_id FK
+        jsonb layout "rows, categories, aisles"
     }
     shows {
         uuid id PK
-        text title
+        uuid movie_id FK
+        uuid screen_id FK
         timestamptz starts_at
-        int price_per_seat "paise"
+        timestamptz ends_at "no overlap per screen"
+    }
+    show_prices {
+        uuid show_id PK,FK
+        text category PK
+        int price "paise"
     }
     seats {
         bigint id PK
         uuid show_id FK
         text seat_label "UNIQUE with show_id"
+        text category "FK to show_prices"
         text status "AVAILABLE, HELD, BOOKED"
         uuid booking_id FK "NULL iff AVAILABLE"
     }
@@ -187,6 +210,7 @@ erDiagram
         bigint id PK
         uuid booking_id FK
         bigint seat_id FK
+        int price "snapshot at hold time"
         bool is_confirmed "partial unique on seat_id"
     }
     payments {
@@ -195,15 +219,6 @@ erDiagram
         text status
         text provider_reference UK
     }
-    idempotency_keys {
-        uuid user_id FK
-        text key "UNIQUE with user_id"
-        text request_hash
-        jsonb response_body
-    }
-    webhook_events {
-        text provider_event_id PK "dedupe"
-    }
     outbox_events {
         bigint id PK
         text event_type
@@ -211,22 +226,20 @@ erDiagram
         timestamptz locked_until "lease"
         uuid lease_token "fencing token"
     }
-    notifications {
-        bigint event_id FK,UK
-        uuid user_id FK
-    }
 ```
 
 The constraints that carry the guarantees:
 
-| Constraint                                                             | What it guarantees                                                                      |
-| ---------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| `one_confirmed_per_seat`: unique `(seat_id) WHERE is_confirmed`        | **A seat is in at most one confirmed booking**, even if application code is wrong (T15) |
-| `one_pending_per_user_show`: unique `(user_id, show_id) WHERE PENDING` | One live hold per user per show (no hoarding)                                           |
-| `seat_status_owner`: `(status = 'AVAILABLE') = (booking_id IS NULL)`   | A seat's owner always matches its status                                                |
-| `idempotency_user_key`: unique `(user_id, key)`                        | Concurrent retries of one request serialize; only one does the work                     |
-| `webhook_events` primary key                                           | A gateway event takes effect once                                                       |
-| `notifications_event_unique`                                           | A redelivered outbox event can't notify twice                                           |
+| Constraint                                                                      | What it guarantees                                                                      |
+| ------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| `one_confirmed_per_seat`: unique `(seat_id) WHERE is_confirmed`                 | **A seat is in at most one confirmed booking**, even if application code is wrong (T15) |
+| `one_pending_per_user_show`: unique `(user_id, show_id) WHERE PENDING`          | One live hold per user per show (no hoarding)                                           |
+| `seat_status_owner`: `(status = 'AVAILABLE') = (booking_id IS NULL)`            | A seat's owner always matches its status                                                |
+| `shows_no_overlap_per_screen`: exclusion on `(screen_id, [starts_at, ends_at))` | A screen never runs two shows at once                                                   |
+| `seats_category_priced`: `(show_id, category)` references `show_prices`         | Every seat has a price for its show                                                     |
+| `idempotency_user_key`: unique `(user_id, key)`                                 | Concurrent retries of one request serialize; only one does the work                     |
+| `webhook_events` primary key                                                    | A gateway event takes effect once                                                       |
+| `notifications_event_unique`                                                    | A redelivered outbox event can't notify twice                                           |
 
 Full DDL: [packages/db/migrations](packages/db/migrations).
 
@@ -320,20 +333,25 @@ npm run loadtest:steady
 
 ## API overview
 
-| Method | Path                                                   | Notes                                                                                         |
-| ------ | ------------------------------------------------------ | --------------------------------------------------------------------------------------------- |
-| POST   | `/api/auth/register`, `/api/auth/login`                | Returns a JWT. Rate limited: 10/min per IP                                                    |
-| GET    | `/api/shows`, `/api/shows/:id`, `/api/shows/:id/seats` | Seat map treats expired holds as available                                                    |
-| POST   | `/api/holds`                                           | Hold 1–6 seats for 5 minutes. Requires `Idempotency-Key`. Holds and pay share 30/min per user |
-| POST   | `/api/holds/:bookingId/release`                        | Give up a hold                                                                                |
-| POST   | `/api/bookings/:id/pay`                                | `202`; the gateway's webhook confirms. Requires `Idempotency-Key`                             |
-| GET    | `/api/bookings/me`, `/api/bookings/:id`                | History and detail                                                                            |
-| POST   | `/api/bookings/:id/cancel`                             | Whole-booking cancellation with refund                                                        |
-| POST   | `/api/webhooks/payment`                                | HMAC-signed gateway callbacks                                                                 |
-| POST   | `/api/admin/shows`                                     | Admin only; creates a show and its 50 seats                                                   |
-| GET    | `/api/admin/outbox-events?status=FAILED`               | Admin only; inspect outbox events                                                             |
-| POST   | `/api/admin/outbox-events/:id/retry`                   | Admin only; send a FAILED event back for delivery                                             |
-| GET    | `/api/health`                                          | Database and Redis reachability (Redis down = `degraded`, still 200)                          |
+| Method | Path                                                           | Notes                                                                                         |
+| ------ | -------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| POST   | `/api/auth/register`, `/api/auth/login`                        | Returns a JWT. Rate limited: 10/min per IP                                                    |
+| GET    | `/api/movies?city=&genre=&language=&q=`                        | Movies with upcoming-show stats, plus genre and language filter values                        |
+| GET    | `/api/movies/:slug`, `/api/movies/:slug/showtimes?city=&date=` | Movie detail; showtimes for one day (IST), grouped by theatre                                 |
+| GET    | `/api/cities`                                                  | Cities with upcoming shows                                                                    |
+| GET    | `/api/shows`, `/api/shows/:id`, `/api/shows/:id/seats`         | Seat map: screen layout, category prices, live seat status (expired holds count as available) |
+| POST   | `/api/holds`                                                   | Hold 1–6 seats for 5 minutes. Requires `Idempotency-Key`. Holds and pay share 30/min per user |
+| POST   | `/api/holds/:bookingId/release`                                | Give up a hold                                                                                |
+| POST   | `/api/bookings/:id/pay`                                        | `202`; the gateway's webhook confirms. Requires `Idempotency-Key`                             |
+| GET    | `/api/bookings/me`, `/api/bookings/:id`                        | History and detail                                                                            |
+| POST   | `/api/bookings/:id/cancel`                                     | Whole-booking cancellation with refund                                                        |
+| POST   | `/api/webhooks/payment`                                        | HMAC-signed gateway callbacks                                                                 |
+| POST   | `/api/admin/movies`, `/api/admin/theatres`                     | Admin only; create catalogue entries                                                          |
+| POST   | `/api/admin/theatres/:id/screens`                              | Admin only; a screen with its seat layout (rows, categories, aisles)                          |
+| POST   | `/api/admin/shows`                                             | Admin only; a showtime with a price per category; its seats are generated from the layout     |
+| GET    | `/api/admin/outbox-events?status=FAILED`                       | Admin only; inspect outbox events                                                             |
+| POST   | `/api/admin/outbox-events/:id/retry`                           | Admin only; send a FAILED event back for delivery                                             |
+| GET    | `/api/health`                                                  | Database and Redis reachability (Redis down = `degraded`, still 200)                          |
 
 Errors share one shape: `{ "error": { "code", "message", "requestId" } }`.
 

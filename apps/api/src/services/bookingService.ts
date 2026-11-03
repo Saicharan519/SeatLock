@@ -12,35 +12,69 @@ interface BookingViewRow {
   expires_at: Date;
   created_at: Date;
   show_id: string;
-  title: string;
-  venue: string;
   starts_at: Date;
+  movie_id: string;
+  movie_slug: string;
+  movie_title: string;
+  poster_url: string | null;
+  certificate: string;
+  language: string;
+  duration_minutes: number;
+  theatre_name: string;
+  theatre_city: string;
+  theatre_address: string;
+  screen_name: string;
   payment_id: string | null;
   payment_status: string | null;
-  seats: string[];
+  items: { label: string; category: string; price: number }[];
 }
 
 const BOOKING_VIEW_SQL = `
   SELECT b.id, b.status, b.total_amount, b.expires_at, b.created_at,
-         s.id AS show_id, s.title, s.venue, s.starts_at,
+         sh.id AS show_id, sh.starts_at,
+         m.id AS movie_id, m.slug AS movie_slug, m.title AS movie_title, m.poster_url,
+         m.certificate, m.language, m.duration_minutes,
+         t.name AS theatre_name, t.city AS theatre_city, t.address AS theatre_address,
+         sc.name AS screen_name,
          p.id AS payment_id, p.status AS payment_status,
          COALESCE(
-           (SELECT array_agg(st.seat_label ORDER BY st.id)
+           (SELECT json_agg(json_build_object('label', st.seat_label,
+                                              'category', st.category,
+                                              'price', i.price) ORDER BY st.id)
             FROM booking_items i JOIN seats st ON st.id = i.seat_id
             WHERE i.booking_id = b.id),
-           '{}') AS seats
+           '[]') AS items
   FROM bookings b
-  JOIN shows s ON s.id = b.show_id
+  JOIN shows sh ON sh.id = b.show_id
+  JOIN movies m ON m.id = sh.movie_id
+  JOIN screens sc ON sc.id = sh.screen_id
+  JOIN theatres t ON t.id = sc.theatre_id
   LEFT JOIN payments p ON p.booking_id = b.id`;
 
+/** items carry the price paid per seat (the snapshot), not the show's current price. */
 const toView = (r: BookingViewRow) => ({
   id: r.id,
   status: r.status,
   totalAmount: r.total_amount,
   expiresAt: r.expires_at.toISOString(),
   createdAt: r.created_at.toISOString(),
-  seats: r.seats,
-  show: { id: r.show_id, title: r.title, venue: r.venue, startsAt: r.starts_at.toISOString() },
+  seats: r.items.map((i) => i.label),
+  items: r.items,
+  show: {
+    id: r.show_id,
+    startsAt: r.starts_at.toISOString(),
+    movie: {
+      id: r.movie_id,
+      slug: r.movie_slug,
+      title: r.movie_title,
+      posterUrl: r.poster_url,
+      certificate: r.certificate,
+      language: r.language,
+      durationMinutes: r.duration_minutes,
+    },
+    theatre: { name: r.theatre_name, city: r.theatre_city, address: r.theatre_address },
+    screen: { name: r.screen_name },
+  },
   payment: r.payment_id ? { id: r.payment_id, status: r.payment_status } : null,
 });
 

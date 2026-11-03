@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router';
 import { Button, Notice } from '../components/ui';
-import { api, ApiError, type Booking } from '../lib/api';
+import { api, ApiError, venueOf, type Booking } from '../lib/api';
 import { formatCountdown, formatMoney, formatWhen } from '../lib/format';
 import { useNow, usePolling } from '../lib/hooks';
 
@@ -89,9 +89,9 @@ export function MyBookings() {
             <li key={b.id} className="rounded-lg border border-rule bg-card px-5 py-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <div className="font-display text-lg font-semibold">{b.show.title}</div>
+                  <div className="font-display text-lg font-semibold">{b.show.movie.title}</div>
                   <div className="text-sm text-ink-soft">
-                    {b.show.venue} · {formatWhen(b.show.startsAt)}
+                    {venueOf(b.show)} · {formatWhen(b.show.startsAt)}
                   </div>
                   <div className="mt-2 font-mono text-sm">
                     {b.seats.join(' · ')}{' '}

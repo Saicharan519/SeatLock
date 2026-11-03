@@ -1,5 +1,5 @@
 import type { Pool } from 'pg';
-import { insertSeatsForShow, withTransaction } from '@seatlock/db';
+import { createStandardShow, withTransaction } from '@seatlock/db';
 import { signToken } from '../../apps/api/src/utils/jwt';
 
 let counter = 0;
@@ -32,24 +32,21 @@ export async function createUsers(pool: Pool, n: number) {
   }));
 }
 
-/** Inserts a show and its 50 seats. Defaults to one day in the future. */
+/**
+ * A show on the standard 50-seat layout (A1..E10, one STANDARD category at pricePerSeat),
+ * with its own movie, theatre and screen. Defaults to one day in the future.
+ */
 export async function createShow(
   pool: Pool,
   opts: { startsAt?: Date; pricePerSeat?: number; title?: string } = {},
 ) {
-  return withTransaction(pool, async (client) => {
-    const { rows } = await client.query<{ id: string }>(
-      `INSERT INTO shows (title, venue, starts_at, price_per_seat) VALUES ($1, 'Test Hall', $2, $3) RETURNING id`,
-      [
-        opts.title ?? 'Test Show',
-        opts.startsAt ?? new Date(Date.now() + 86_400_000),
-        opts.pricePerSeat ?? 20000,
-      ],
-    );
-    const showId = rows[0]!.id;
-    await insertSeatsForShow(client, showId);
-    return showId;
-  });
+  return withTransaction(pool, (client) =>
+    createStandardShow(client, {
+      startsAt: opts.startsAt,
+      price: opts.pricePerSeat,
+      title: opts.title,
+    }),
+  );
 }
 
 /**

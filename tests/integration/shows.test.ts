@@ -30,9 +30,12 @@ describe('shows and seat map (FR-02, FR-03)', () => {
     expect(res.status).toBe(200);
     expect(res.body.shows.map((s: { id: string }) => s.id)).toEqual([sooner, later]);
     expect(res.body.shows[0]).toMatchObject({
-      title: 'Sooner',
-      venue: 'Test Hall',
-      pricePerSeat: 20000,
+      movie: { title: 'Sooner' },
+      theatre: { city: 'Testville' },
+      screen: { name: 'Screen 1' },
+      prices: [{ category: 'STANDARD', price: 20000 }],
+      totalSeats: 50,
+      availableSeats: 50,
     });
   });
 
@@ -51,8 +54,16 @@ describe('shows and seat map (FR-02, FR-03)', () => {
     const res = await request(app).get(`/api/shows/${id}/seats`);
     expect(res.status).toBe(200);
     expect(res.body.seats).toHaveLength(50);
-    expect(res.body.seats[0]).toEqual({ label: 'A1', status: 'AVAILABLE' });
-    expect(res.body.seats[49]).toEqual({ label: 'E10', status: 'AVAILABLE' });
+    expect(res.body.seats[0]).toEqual({ label: 'A1', status: 'AVAILABLE', category: 'STANDARD' });
+    expect(res.body.seats[49]).toEqual({ label: 'E10', status: 'AVAILABLE', category: 'STANDARD' });
+    expect(res.body.layout.rows.map((r: { label: string }) => r.label)).toEqual([
+      'A',
+      'B',
+      'C',
+      'D',
+      'E',
+    ]);
+    expect(res.body.prices).toEqual([{ category: 'STANDARD', price: 20000 }]);
     expect(res.body.seats.every((s: { status: string }) => s.status === 'AVAILABLE')).toBe(true);
   });
 
@@ -85,60 +96,5 @@ describe('shows and seat map (FR-02, FR-03)', () => {
     expect(status.A1).toBe('HELD');
     expect(status.A2).toBe('BOOKED');
     expect(status.B1).toBe('AVAILABLE');
-  });
-
-  describe('POST /admin/shows', () => {
-    const body = () => ({
-      title: 'Dune: Part Three',
-      venue: 'INOX, Screen 2',
-      startsAt: new Date(Date.now() + 86_400_000).toISOString(),
-      pricePerSeat: 30000,
-    });
-
-    test('requires authentication (401) and the ADMIN role (403)', async () => {
-      expect((await request(app).post('/api/admin/shows').send(body())).status).toBe(401);
-
-      const user = await createUser(pool);
-      const res = await request(app)
-        .post('/api/admin/shows')
-        .set('Authorization', `Bearer ${user.token}`)
-        .send(body());
-      expect(res.status).toBe(403);
-      expect(res.body.error.code).toBe('FORBIDDEN');
-    });
-
-    test('creates the show and its 50 seats', async () => {
-      const admin = await createUser(pool, 'ADMIN');
-      const res = await request(app)
-        .post('/api/admin/shows')
-        .set('Authorization', `Bearer ${admin.token}`)
-        .send(body());
-      expect(res.status).toBe(201);
-      expect(res.body.show).toMatchObject({
-        title: 'Dune: Part Three',
-        pricePerSeat: 30000,
-        seatCount: 50,
-      });
-
-      const { rows } = await pool.query(`SELECT count(*)::int AS n FROM seats WHERE show_id = $1`, [
-        res.body.show.id,
-      ]);
-      expect(rows[0].n).toBe(50);
-    });
-
-    test('rejects past start times and non-integer prices', async () => {
-      const admin = await createUser(pool, 'ADMIN');
-      const send = (b: object) =>
-        request(app).post('/api/admin/shows').set('Authorization', `Bearer ${admin.token}`).send(b);
-
-      const past = await send({ ...body(), startsAt: new Date(Date.now() - 1000).toISOString() });
-      expect(past.status).toBe(400);
-      const fractional = await send({ ...body(), pricePerSeat: 199.5 });
-      expect(fractional.status).toBe(400);
-      expect(fractional.body.error.code).toBe('VALIDATION_ERROR');
-
-      const { rows } = await pool.query(`SELECT count(*)::int AS n FROM shows`);
-      expect(rows[0].n).toBe(0);
-    });
   });
 });

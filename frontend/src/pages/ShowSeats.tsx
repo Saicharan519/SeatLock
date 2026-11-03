@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { SeatGrid, SeatLegend } from '../components/SeatGrid';
 import { Button, Label, Notice } from '../components/ui';
-import { api, ApiError, type SeatStatus, type Show } from '../lib/api';
+import { api, ApiError, venueOf, type SeatMap, type SeatStatus, type Show } from '../lib/api';
 import { formatMoney, formatWhen } from '../lib/format';
 import { usePolling } from '../lib/hooks';
 
@@ -15,6 +15,9 @@ export function ShowSeats() {
   const navigate = useNavigate();
   const [show, setShow] = useState<Show | null>(null);
   const [seats, setSeats] = useState<Map<string, SeatStatus>>(new Map());
+  const [plan, setPlan] = useState<Pick<SeatMap, 'layout' | 'prices'> | null>(null);
+  /** label -> price in paise, from the seat's category */
+  const [priceOf, setPriceOf] = useState<Map<string, number>>(new Map());
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [notice, setNotice] = useState<{ tone: 'info' | 'error'; text: React.ReactNode } | null>(
     null,
@@ -37,11 +40,14 @@ export function ShowSeats() {
   // Live seat map: other people's holds and bookings appear within ~2 s. The public map
   // can't say whose hold a seat is under, so the user's own live hold is fetched alongside.
   usePolling(async () => {
-    const [{ seats: list }, { bookings }] = await Promise.all([
+    const [{ seats: list, layout, prices }, { bookings }] = await Promise.all([
       api.seatMap(showId!),
       api.myBookings(),
     ]);
     const next = new Map(list.map((s) => [s.label, s.status]));
+    const byCategory = new Map(prices.map((p) => [p.category, p.price]));
+    setPlan({ layout, prices });
+    setPriceOf(new Map(list.map((s) => [s.label, byCategory.get(s.category) ?? 0])));
     const live = bookings.find(
       (b) =>
         b.show.id === showId &&
@@ -120,7 +126,7 @@ export function ShowSeats() {
   };
 
   const picked = [...selected].sort(SEAT_ORDER);
-  const total = show ? picked.length * show.pricePerSeat : 0;
+  const total = picked.reduce((sum, l) => sum + (priceOf.get(l) ?? 0), 0);
 
   return (
     <div>
@@ -129,18 +135,24 @@ export function ShowSeats() {
       </Link>
       {show && (
         <div className="mt-3 mb-10">
-          <h1 className="font-display text-3xl font-bold tracking-tight">{show.title}</h1>
+          <h1 className="font-display text-3xl font-bold tracking-tight">{show.movie.title}</h1>
           <p className="text-ink-soft">
-            {show.venue} · {formatWhen(show.startsAt)}
+            {venueOf(show)} · {formatWhen(show.startsAt)}
+          </p>
+          <p className="mt-1 font-mono text-xs text-ink-soft">
+            {show.prices
+              .map((p) => `${p.category.replace(/_/g, ' ')} ${formatMoney(p.price)}`)
+              .join('  ·  ')}
           </p>
         </div>
       )}
 
       <div className="grid gap-10 lg:grid-cols-[1fr_280px]">
-        <section aria-label="Seat map" className="space-y-8">
+        <section aria-label="Seat map" className="min-w-0 space-y-8">
           {/* Not before the first real seat map: an empty map would show every seat as free */}
-          {seats.size > 0 ? (
+          {seats.size > 0 && plan ? (
             <SeatGrid
+              rows={plan.layout.rows}
               seats={seats}
               selected={selected}
               mine={new Set(myHold?.seats)}
@@ -185,9 +197,9 @@ export function ShowSeats() {
               <Label>Total</Label>
               <span className="font-mono text-xl font-semibold">{formatMoney(total)}</span>
             </div>
-            {show && picked.length > 0 && (
+            {picked.length > 0 && (
               <div className="mt-1 text-right font-mono text-xs text-ink-soft">
-                {picked.length} × {formatMoney(show.pricePerSeat)}
+                {picked.map((l) => `${l} ${formatMoney(priceOf.get(l) ?? 0)}`).join(' + ')}
               </div>
             )}
             <Button
