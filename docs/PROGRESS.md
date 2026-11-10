@@ -4,16 +4,16 @@ Last updated: 2026-11-10, after Phase 13.5. **Live at https://seat-lock-ten.verc
 
 ## v2 phases
 
-| Phase                             | Status  | Commit                                      | Tests after                                   | Write-up                                      |
-| --------------------------------- | ------- | ------------------------------------------- | --------------------------------------------- | --------------------------------------------- |
-| 11 Dev workflow and understanding | Done    | `915b9bc`                                   | 103 / 103 (re-run 2026-11-03, 113 s)          | [phase-11](phases/phase-11-dev-workflow.md)   |
-| 12 Product data model             | Done    | `3439349`                                   | 118 / 118                                     | [phase-12](phases/phase-12-data-model.md)     |
-| 13 Frontend rebuild               | Done    | `9a48cd1`                                   | 118 / 118 (backend unchanged); frontend build | [phase-13](phases/phase-13-frontend.md)       |
-| 13.5 First deployment             | Done    | `80bc0a5`, `e9fe297`, records _uncommitted_ | 127 / 127; live booking + refund verified     | [phase-13.5](phases/phase-13.5-deployment.md) |
-| 14 Payments v2 (Razorpay + mock)  | Next    |                                             |                                               |                                               |
-| 15 Admin dashboard                | Planned |                                             |                                               |                                               |
-| 16 Hardening                      | Planned |                                             |                                               |                                               |
-| 17 Interview pack                 | Planned |                                             |                                               |                                               |
+| Phase                             | Status  | Commit                                  | Tests after                                   | Write-up                                      |
+| --------------------------------- | ------- | --------------------------------------- | --------------------------------------------- | --------------------------------------------- |
+| 11 Dev workflow and understanding | Done    | `915b9bc`                               | 103 / 103 (re-run 2026-11-03, 113 s)          | [phase-11](phases/phase-11-dev-workflow.md)   |
+| 12 Product data model             | Done    | `3439349`                               | 118 / 118                                     | [phase-12](phases/phase-12-data-model.md)     |
+| 13 Frontend rebuild               | Done    | `9a48cd1`                               | 118 / 118 (backend unchanged); frontend build | [phase-13](phases/phase-13-frontend.md)       |
+| 13.5 First deployment             | Done    | `80bc0a5`, `e9fe297`, records `4a23904` | 127 / 127; live booking + refund verified     | [phase-13.5](phases/phase-13.5-deployment.md) |
+| 14 Payments v2 (Razorpay + mock)  | Next    |                                         |                                               |                                               |
+| 15 Admin dashboard                | Planned |                                         |                                               |                                               |
+| 16 Hardening                      | Planned |                                         |                                               |                                               |
+| 17 Interview pack                 | Planned |                                         |                                               |                                               |
 
 **Tests since v2:** 127 in 21 files (Phase 13.5 added hosting.test.ts, 9). Phase 12 added catalog.test.ts (14) and seed.test.ts (2), added 2 schema tests, and moved the 3 admin-show tests from shows.test.ts into catalog.test.ts (rewritten for the new model). No test was deleted.
 
