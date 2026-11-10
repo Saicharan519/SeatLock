@@ -7,7 +7,12 @@ import { createTestPool, resetDatabase } from '../helpers/db';
 import { createShow, createUser, holdSeatsDirectly } from '../helpers/factories';
 
 const TTL_SECONDS = 5; // From tests/setup/env.ts, as the PRD specifies for tests
-const waitPastTtl = () => new Promise((resolve) => setTimeout(resolve, TTL_SECONDS * 1000 + 500));
+/**
+ * Waits until the database considers the hold expired. 1.5 s past the TTL, not less: the
+ * expiry is judged by the database clock, and Docker Desktop's VM clock was seen running
+ * slow between its corrections (a 5.5 s wait sometimes counted as under 5 s).
+ */
+const waitPastTtl = () => new Promise((resolve) => setTimeout(resolve, TTL_SECONDS * 1000 + 1500));
 
 describe('hold expiry (FR-07)', () => {
   let pool: Pool;

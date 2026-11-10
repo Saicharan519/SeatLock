@@ -44,8 +44,10 @@ describe('POST /api/holds and release (FR-04, FR-06, FR-09)', () => {
     expect(res.status).toBe(201);
     expect(res.body).toMatchObject({ status: 'PENDING', seats: ['A1', 'A2'], totalAmount: 50000 });
     const expiresIn = new Date(res.body.expiresAt).getTime() - Date.now();
+    // expiresAt comes from the database clock (R5), Date.now() from this process: on Docker
+    // Desktop the two were measured up to ~0.7 s apart, so allow 2 s either way
     expect(expiresIn).toBeGreaterThan(290_000);
-    expect(expiresIn).toBeLessThanOrEqual(300_000);
+    expect(expiresIn).toBeLessThanOrEqual(302_000);
 
     expect(await seatStatus(showId, 'A1')).toEqual({
       status: 'HELD',

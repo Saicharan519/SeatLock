@@ -28,6 +28,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "jest --runInBand",
+    "test:e2e": "playwright test",
     "demo:race": "tsx demo/race/run.ts",
     "loadtest:spike": "bash tests/k6/run.sh spike",
     "loadtest:steady": "bash tests/k6/run.sh steady"
@@ -46,6 +47,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.65.0",
     "@types/express": "^5.0.6",
     "@types/jest": "^30.0.0",
     "@types/jsonwebtoken": "^9.0.10",

@@ -335,6 +335,12 @@ Run the tests (they use a separate `seatlock_test` database):
 npm test
 ```
 
+The browser tests (Playwright, Chromium): the production frontend build plus the whole backend, on their own `seatlock_e2e` database, which they create and reset themselves. Six flows: book and pay, two people racing for one seat, cancel and refund, sign out, an admin scheduling a show (and a clash), a customer kept out of `/admin`. First time only: `npx playwright install chromium`.
+
+```bash
+npm run test:e2e
+```
+
 The race demo and the k6 load tests (k6 and the API run in Docker; they need a `seatlock_load` database, see [docs/results.md](docs/results.md)):
 
 ```bash

@@ -8,6 +8,9 @@ coverage/
 *.pem
 *.log
 tests/k6/results/
+# Playwright output
+test-results/
+playwright-report/
 tests/k6/data/
 
 # Personal interview prep, kept local only

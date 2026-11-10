@@ -135,7 +135,11 @@ function AccountMenu() {
           <button
             role="menuitem"
             type="button"
-            onClick={() => void signOut().then(() => navigate('/'))}
+            onClick={() => {
+              // Leave first: signing out on a private page would otherwise bounce to sign-in
+              navigate('/');
+              void signOut();
+            }}
             className="block w-full border-t border-line px-4 py-2.5 text-left text-sm text-dim hover:bg-night-3 hover:text-screen"
           >
             Sign out

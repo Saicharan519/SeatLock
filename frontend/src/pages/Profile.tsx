@@ -42,7 +42,14 @@ export function Profile() {
             </span>
           )}
         </div>
-        <Button variant="secondary" onClick={() => void signOut().then(() => navigate('/'))}>
+        <Button
+          variant="secondary"
+          onClick={() => {
+            // Leave first: signing out on a private page would otherwise bounce to sign-in
+            navigate('/');
+            void signOut();
+          }}
+        >
           Sign out
         </Button>
       </section>
