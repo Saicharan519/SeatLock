@@ -128,7 +128,54 @@ export function setUnauthenticatedHandler(fn: () => void) {
   onUnauthenticated = fn;
 }
 
+/**
+ * Free hosting puts the backend to sleep when nobody uses it; the first request then takes
+ * up to a minute. Requests slower than SLOW_MS are reported so the UI can say so, and reads
+ * (GET) are retried while the backend wakes. Writes are never retried here: holds and
+ * payments carry idempotency keys and are retried deliberately by the pages.
+ */
+const SLOW_MS = 4000;
+const WAKE_RETRIES = 6;
+let slowRequests = 0;
+const slowListeners = new Set<(waking: boolean) => void>();
+function setSlow(delta: number) {
+  slowRequests += delta;
+  slowListeners.forEach((l) => l(slowRequests > 0));
+}
+export function onWaking(listener: (waking: boolean) => void): () => void {
+  slowListeners.add(listener);
+  return () => slowListeners.delete(listener);
+}
+
 async function request<T>(
+  method: string,
+  path: string,
+  opts: { body?: unknown; idempotencyKey?: string } = {},
+): Promise<T> {
+  let slow = false;
+  const timer = setTimeout(() => {
+    slow = true;
+    setSlow(1);
+  }, SLOW_MS);
+  try {
+    for (let attempt = 0; ; attempt++) {
+      try {
+        return await requestOnce<T>(method, path, opts);
+      } catch (err) {
+        const e = err as ApiError;
+        // 502/503/504 or no connection while the backend starts up: wait and try again
+        const waking = e.status === 0 || e.status === 502 || e.status === 503 || e.status === 504;
+        if (method !== 'GET' || !waking || attempt >= WAKE_RETRIES) throw err;
+        await new Promise((r) => setTimeout(r, 2000 * (attempt + 1)));
+      }
+    }
+  } finally {
+    clearTimeout(timer);
+    if (slow) setSlow(-1);
+  }
+}
+
+async function requestOnce<T>(
   method: string,
   path: string,
   opts: { body?: unknown; idempotencyKey?: string } = {},

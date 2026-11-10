@@ -1,0 +1,54 @@
+# Render Blueprint: the SeatLock backend as ONE free web service (all-in-one mode: the API,
+# the worker and the mock payment gateway in one Node process). The frontend is on Vercel,
+# Postgres on Neon, Redis on Upstash. See docs/deploy.md.
+#
+# Values marked `sync: false` are entered in the Render dashboard when the Blueprint is
+# created; they are never stored in this repository.
+services:
+  - type: web
+    name: seatlock-api
+    runtime: node
+    plan: free
+    region: singapore
+    # --include=dev: the build needs esbuild and TypeScript tooling even though NODE_ENV is production
+    buildCommand: npm ci --include=dev && npm run build
+    # Migrate, top up the catalogue (fast when nothing is missing), then start everything
+    startCommand: npx node-pg-migrate up -m packages/db/migrations --no-verbose && node dist/seed.js && node dist/all.js
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: '24'
+      - key: NODE_ENV
+        value: production
+      - key: LOG_LEVEL
+        value: info
+      # Neon: the DIRECT connection string (not the "-pooler" one), with ?sslmode=require
+      - key: DATABASE_URL
+        sync: false
+      # Upstash: the rediss:// URL (TLS)
+      - key: REDIS_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: WEBHOOK_SECRET
+        generateValue: true
+      # The same value is set on Vercel; Vercel adds it to every request it forwards
+      - key: ORIGIN_SECRET
+        sync: false
+      # Vercel puts the visitor's real IP in x-real-ip; trusted only with ORIGIN_SECRET
+      - key: CLIENT_IP_HEADER
+        value: x-real-ip
+      - key: SEED_ADMIN_PASSWORD
+        sync: false
+      - key: SEED_DEMO_EMAIL
+        value: demo@seatlock.app
+      - key: SEED_DEMO_PASSWORD
+        sync: false
+      # Small pools: Neon's free compute is shared by the API, worker and gateway
+      - key: PG_POOL_MAX
+        value: '5'
+      - key: CATALOG_MAINTENANCE_HOURS
+        value: '6'
+      # The mock gateway's failure-mode switch stays off on the public site
+      - key: GATEWAY_CONTROL_ENABLED
+        value: 'false'

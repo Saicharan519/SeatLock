@@ -95,6 +95,8 @@ services:
     environment:
       <<: *app-env
       WORKER_INTERVAL_MS: ${WORKER_INTERVAL_MS:-5000}
+      # Top up showtimes and prune old unbooked shows every 6 hours, so the demo never runs out
+      CATALOG_MAINTENANCE_HOURS: ${CATALOG_MAINTENANCE_HOURS:-6}
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -110,6 +112,10 @@ services:
       GATEWAY_CONTROL_ENABLED: 'true'
     ports:
       - '4000:4000'
+    # It keeps its charges in Postgres (DATABASE_URL), so it needs the migrated schema
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
     restart: unless-stopped
 
   frontend:

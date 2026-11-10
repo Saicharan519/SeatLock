@@ -19,12 +19,35 @@ const apiEnvSchema = baseEnvSchema.extend({
   RATE_LIMIT_BOOKING_PER_MINUTE: z.coerce.number().int().positive().default(30),
   /** The timezone calendar days are counted in ("shows on 4 Nov" means 4 Nov in this zone) */
   APP_TIMEZONE: z.string().default('Asia/Kolkata'),
-  /** Only behind a trusted reverse proxy: makes req.ip come from X-Forwarded-For */
+  /**
+   * Only behind ONE trusted reverse proxy (the Docker stack's nginx, which overwrites
+   * X-Forwarded-For): req.ip is then taken from that header, trusting exactly one hop.
+   */
   TRUST_PROXY: z.stringbool().default(false),
+  /**
+   * When set, every request except webhooks and the health check must carry this value in
+   * the X-Origin-Secret header. The hosted setup has Vercel add it on every proxied request,
+   * so the backend can't be called directly, bypassing Vercel.
+   */
+  ORIGIN_SECRET: z.string().min(32, 'must be at least 32 characters').optional(),
+  /**
+   * A header holding the visitor's IP, set by the trusted proxy in front (Vercel sets
+   * x-real-ip). Only honoured together with ORIGIN_SECRET, because otherwise anyone could
+   * send the header themselves and pick the IP the rate limiter sees.
+   */
+  CLIENT_IP_HEADER: z
+    .string()
+    .regex(/^[a-z0-9-]+$/)
+    .optional(),
 });
 
 export type ApiConfig = z.infer<typeof apiEnvSchema>;
 
 export function loadApiConfig(): ApiConfig {
-  return loadEnv(apiEnvSchema);
+  const config = loadEnv(apiEnvSchema);
+  if (config.CLIENT_IP_HEADER && !config.ORIGIN_SECRET) {
+    console.error('CLIENT_IP_HEADER is only safe with ORIGIN_SECRET set');
+    process.exit(1);
+  }
+  return config;
 }

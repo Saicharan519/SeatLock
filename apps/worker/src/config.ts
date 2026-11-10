@@ -14,6 +14,10 @@ const workerEnvSchema = baseEnvSchema.extend({
   GATEWAY_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
   /** Base URL of the API, for the refund webhook callback */
   API_PUBLIC_URL: z.url().default('http://localhost:3000'),
+  /** Tops up showtimes and prunes old unbooked shows every N hours. 0 = off */
+  CATALOG_MAINTENANCE_HOURS: z.coerce.number().min(0).default(0),
+  /** How many days ahead the top-up schedules showtimes */
+  CATALOG_DAYS: z.coerce.number().int().min(1).max(30).default(7),
 });
 
 export type WorkerConfig = z.infer<typeof workerEnvSchema>;

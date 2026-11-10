@@ -14,6 +14,7 @@ import { createBookingController } from './controllers/bookingController';
 import { createHoldController } from './controllers/holdController';
 import { createWebhookController } from './controllers/webhookController';
 import { requireAuth } from './middleware/auth';
+import { clientIp, requireOriginSecret } from './middleware/origin';
 import { errorHandler, notFound } from './middleware/errorHandler';
 import { rateLimit } from './middleware/rateLimit';
 import { requestLogger } from './middleware/requestLogger';
@@ -54,7 +55,7 @@ export function createApp({ pool, config, logger, gateway, redis = null }: AppDe
     name: 'auth',
     limit: config.RATE_LIMIT_AUTH_PER_MINUTE,
     windowSeconds: 60,
-    keyOf: (req) => req.ip,
+    keyOf: clientIp(config),
     logger,
   });
   const limitBookingByUser = rateLimit({
@@ -85,8 +86,15 @@ export function createApp({ pool, config, logger, gateway, redis = null }: AppDe
 
   const app = express();
   app.disable('x-powered-by');
-  if (config.TRUST_PROXY) app.set('trust proxy', true);
+  // Exactly one hop: the proxy directly in front, never a client-supplied chain
+  if (config.TRUST_PROXY) app.set('trust proxy', 1);
   app.use(requestLogger(logger));
+  // API answers are personal (bookings, holds) or live (seat maps): no shared cache may keep them
+  app.use('/api', (_req, res, next) => {
+    res.set('Cache-Control', 'no-store');
+    next();
+  });
+  if (config.ORIGIN_SECRET) app.use('/api', requireOriginSecret(config.ORIGIN_SECRET));
   // Raw body, so it must come before express.json()
   app.use('/api', webhooksRouter(webhookController));
   app.use(express.json({ limit: '100kb' }));

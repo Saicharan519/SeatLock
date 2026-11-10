@@ -8,6 +8,7 @@ export function createTestPool(max = 20): Pool {
 const TABLES = [
   'notifications',
   'outbox_events',
+  'mock_gateway_charges',
   'webhook_events',
   'idempotency_keys',
   'payments',

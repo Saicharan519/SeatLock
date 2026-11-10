@@ -121,25 +121,35 @@ Modern hybrid: dark cinematic hero and poster-led browsing, clean light-weight d
 
 ## 8. Deployment
 
-Decided after the product works, because it needs your accounts. Two candidates:
+**Decided (2026-11-10): Vercel + Render + Neon + Upstash, all free.** Step by step: [deploy.md](deploy.md).
 
-- **A (free):** Vercel frontend, one Render service running API + worker + mock gateway, Neon Postgres, Upstash Redis. Sleeps when idle.
-- **B (simplest and most faithful):** one small VPS running the existing `docker-compose.yml` behind Caddy for HTTPS. Never sleeps.
+How it was decided:
 
-Before either: trust exactly one proxy hop, real secrets, mock-gateway control endpoint off.
+- Azure for Students: the college email domain isn't recognised by Microsoft. Oracle Always Free: sign-up didn't work. A VPS (Hetzner etc.): paid.
+- AWS: the account's Free plan credits (about $149, ending 2027-04-28) already pay for another project's server (about $85 to the end). A second server (+$15/month) or sharing that 1 GB server would risk running the credits out early, which suspends the whole account. AWS stays dedicated to that project.
+- Render + Neon + Upstash + Vercel need no card and no credits, and are where SeatLock would have moved after April anyway: deploying there now means deploying once.
+
+What the free plans require of the code (Phase 13.5):
+
+- **All-in-one mode:** Render has no free background workers, so the API, worker and mock gateway run in one Node process. Locally and in Docker they stay separate.
+- **Sleep-safe:** Render sleeps after 15 idle minutes. Correctness doesn't depend on the worker being awake (outbox in Postgres, read-time hold expiry, payment sweep on wake). The UI says "waking up" and retries reads.
+- **No keep-alive pinger:** Neon's free compute (100 CU-hours/month) would run out if the worker polled it 24/7.
+- **Storage cap:** Neon free is 1 GB, so old unbooked shows are pruned and showtimes topped up by the worker.
+- **Security for a public site:** the backend only accepts traffic through Vercel (origin secret); the rate limiter uses Vercel's client IP; API responses are `no-store`; no default admin password in production; the mock gateway listens on localhost with its failure switch off and keeps its charges in Postgres (so refunds survive restarts).
+- **Address:** a `*.vercel.app` name. DuckDNS can't be used (it only points at IP addresses; Vercel needs a CNAME).
 
 ## 9. Roadmap
 
-| Phase | Name                           | Outcome                                                                                                   |
-| ----- | ------------------------------ | --------------------------------------------------------------------------------------------------------- |
-| 11    | Dev workflow and understanding | `npm run dev`; both workflows verified; test suite run; a guided first booking with database checks       |
-| 12    | Product data model             | Movies, theatres, screens, showtimes, seat categories; migrations, API, rolling seed with ~12 movies      |
-| 13    | Frontend rebuild               | Landing, discovery, movie page, seat selection, checkout, ticket, bookings, profile                       |
-| 13.5  | First deployment               | The Phase 13 product live on a public URL (needed for Razorpay webhooks; surfaces hosting problems early) |
-| 14    | Payments v2                    | `PaymentProvider`, Razorpay test mode, sandbox checkout UX, both providers tested                         |
-| 15    | Admin dashboard                | Movies, shows, stats, outbox UI                                                                           |
-| 16    | Hardening                      | Cookie auth, proxy fix, secrets, end-to-end browser tests, final deployment                               |
-| 17    | Interview pack                 | Architecture walkthrough, decision defence, Q&A, demo video script                                        |
+| Phase | Name                           | Outcome                                                                                                  |
+| ----- | ------------------------------ | -------------------------------------------------------------------------------------------------------- |
+| 11    | Dev workflow and understanding | `npm run dev`; both workflows verified; test suite run; a guided first booking with database checks      |
+| 12    | Product data model             | Movies, theatres, screens, showtimes, seat categories; migrations, API, rolling seed with ~12 movies     |
+| 13    | Frontend rebuild               | Landing, discovery, movie page, seat selection, checkout, ticket, bookings, profile                      |
+| 13.5  | First deployment               | Live on Vercel + Render + Neon + Upstash (free), all-in-one mode, sleep-safe, hardened for public access |
+| 14    | Payments v2                    | `PaymentProvider`, Razorpay test mode, sandbox checkout UX, both providers tested                        |
+| 15    | Admin dashboard                | Movies, shows, stats, outbox UI                                                                          |
+| 16    | Hardening                      | Cookie auth, proxy fix, secrets, end-to-end browser tests, final deployment                              |
+| 17    | Interview pack                 | Architecture walkthrough, decision defence, Q&A, demo video script                                       |
 
 If time runs short, cut in this order: admin dashboard extras, then cookie auth. Never the frontend, the deployment or the tests.
 

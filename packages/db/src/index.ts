@@ -20,5 +20,7 @@ export {
   createStandardShow,
 } from './catalog';
 
+export { seedCatalog, pruneOldShows, type SeedResult } from './seedCatalog';
+
 /** Anything that can run a query: the pool, or a client inside a transaction. */
 export type Queryable = Pick<import('pg').Pool, 'query'>;

@@ -16,6 +16,10 @@ PostgreSQL enforces it with row locks, guarded updates and constraints, not just
 | **Payment confirmed by the gateway's signed webhook** | **Your ticket**                                     |
 | ![Processing](docs/screenshots/processing.jpg)        | ![Ticket](docs/screenshots/ticket.jpg)              |
 
+## Live demo
+
+The hosted version runs on free plans (Vercel, Render, Neon, Upstash): see [docs/deploy.md](docs/deploy.md). The backend sleeps when idle, so the first visit can take up to a minute.
+
 ## Try it in one command
 
 Requires only Docker.
@@ -361,12 +365,14 @@ Errors share one shape: `{ "error": { "code", "message", "requestId" } }`.
 
 ## Documentation
 
-| Doc                                        | What's in it                                                                |
-| ------------------------------------------ | --------------------------------------------------------------------------- |
-| [docs/prd-v2.md](docs/prd-v2.md)           | v2 plan (in progress): movies, theatres, real checkout, deployment          |
-| [prd.md](prd.md)                           | v1 requirements: concurrency rules, state machines                          |
-| [docs/PROGRESS.md](docs/PROGRESS.md)       | Phase status, acceptance-test checklist                                     |
-| [docs/decisions.md](docs/decisions.md)     | Every design decision and trade-off, plus known limitations                 |
-| [docs/results.md](docs/results.md)         | Measured results and environment                                            |
-| [docs/demo-script.md](docs/demo-script.md) | Step-by-step script for the race and late-payment demo                      |
-| [docs/phases/](docs/phases/)               | A detailed write-up of each phase: what was built, why, and what went wrong |
+| Doc                                                    | What's in it                                                                |
+| ------------------------------------------------------ | --------------------------------------------------------------------------- |
+| [docs/prd-v2.md](docs/prd-v2.md)                       | v2 plan (in progress): movies, theatres, real checkout, deployment          |
+| [prd.md](prd.md)                                       | v1 requirements: concurrency rules, state machines                          |
+| [docs/PROGRESS.md](docs/PROGRESS.md)                   | Phase status, acceptance-test checklist                                     |
+| [docs/decisions.md](docs/decisions.md)                 | Every design decision and trade-off, plus known limitations                 |
+| [docs/results.md](docs/results.md)                     | Measured results and environment                                            |
+| [docs/deploy.md](docs/deploy.md)                       | Free hosting on Vercel + Render + Neon + Upstash, step by step              |
+| [docs/manual-test-guide.md](docs/manual-test-guide.md) | Hands-on tour of every page and failure case                                |
+| [docs/demo-script.md](docs/demo-script.md)             | Step-by-step script for the race and late-payment demo                      |
+| [docs/phases/](docs/phases/)                           | A detailed write-up of each phase: what was built, why, and what went wrong |

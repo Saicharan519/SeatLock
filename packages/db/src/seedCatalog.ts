@@ -515,3 +515,25 @@ export async function seedCatalog(
   }
   return result;
 }
+
+/**
+ * Deletes shows that ended more than `olderThanHours` ago and were never booked, with their
+ * seats and prices. Keeps the database small on hosting with a storage cap (the rolling
+ * seed adds about 300 shows and 40,000 seats a week). Booked shows are kept: their
+ * bookings, payments and tickets must stay readable.
+ */
+export async function pruneOldShows(client: PoolClient, olderThanHours = 24): Promise<number> {
+  const { rows } = await client.query<{ id: string }>(
+    `SELECT sh.id FROM shows sh
+     WHERE sh.ends_at < now() - make_interval(hours => $1)
+       AND NOT EXISTS (SELECT 1 FROM bookings b WHERE b.show_id = sh.id)
+     LIMIT 500`,
+    [olderThanHours],
+  );
+  if (rows.length === 0) return 0;
+  const ids = rows.map((r) => r.id);
+  await client.query(`DELETE FROM seats WHERE show_id = ANY($1::uuid[])`, [ids]);
+  await client.query(`DELETE FROM show_prices WHERE show_id = ANY($1::uuid[])`, [ids]);
+  await client.query(`DELETE FROM shows WHERE id = ANY($1::uuid[])`, [ids]);
+  return ids.length;
+}

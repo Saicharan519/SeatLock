@@ -49,12 +49,24 @@ interface Charge {
   callbackUrl: string;
 }
 
+/**
+ * Optional durable storage for charges and refunds, so a restarted gateway still knows
+ * them. Without a store everything lives in memory (tests, local development).
+ */
+export interface GatewayStore {
+  getCharge(paymentId: string): Promise<Charge | undefined>;
+  saveCharge(paymentId: string, charge: Charge): Promise<void>;
+  getRefund(paymentId: string): Promise<string | undefined>;
+  saveRefund(paymentId: string, refundId: string): Promise<void>;
+}
+
 export interface GatewayOptions {
   webhookSecret: string;
   logger: Logger;
   /** Enables POST /__control. Off in production. */
   controlEnabled: boolean;
   webhookDelayMs?: number;
+  store?: GatewayStore;
 }
 
 export function createGatewayApp(opts: GatewayOptions) {
@@ -100,13 +112,24 @@ export function createGatewayApp(opts: GatewayOptions) {
   app.use(express.json());
 
   /** Idempotent by paymentId: a retried charge returns the original and sends no new webhook. */
-  app.post('/charges', (req, res) => {
+  const findCharge = async (paymentId: string) => {
+    const known = charges.get(paymentId) ?? (await opts.store?.getCharge(paymentId));
+    if (known) charges.set(paymentId, known);
+    return known;
+  };
+  const findRefund = async (paymentId: string) => {
+    const known = refunds.get(paymentId) ?? (await opts.store?.getRefund(paymentId));
+    if (known) refunds.set(paymentId, known);
+    return known;
+  };
+
+  app.post('/charges', async (req, res) => {
     const input = chargeSchema.safeParse(req.body);
     if (!input.success) return res.status(400).json({ error: 'invalid_request' });
     const { paymentId, amount, callbackUrl } = input.data;
     chargeCalls.set(paymentId, (chargeCalls.get(paymentId) ?? 0) + 1);
 
-    const existing = charges.get(paymentId);
+    const existing = await findCharge(paymentId);
     if (existing) return res.status(200).json({ chargeId: existing.chargeId, status: 'accepted' });
 
     const { mode, delayMs, lateMs } = settings;
@@ -114,6 +137,7 @@ export function createGatewayApp(opts: GatewayOptions) {
 
     const charge: Charge = { chargeId: `ch_${randomUUID()}`, amount, callbackUrl };
     charges.set(paymentId, charge);
+    await opts.store?.saveCharge(paymentId, charge);
     opts.logger.info({ paymentId, chargeId: charge.chargeId, mode }, 'charge accepted');
 
     const succeeded = paymentEvent('payment.succeeded', paymentId, charge);
@@ -142,19 +166,20 @@ export function createGatewayApp(opts: GatewayOptions) {
   });
 
   /** Idempotent by paymentId. Confirms asynchronously with a refund.succeeded webhook. */
-  app.post('/refunds', (req, res) => {
+  app.post('/refunds', async (req, res) => {
     const input = refundSchema.safeParse(req.body);
     if (!input.success) return res.status(400).json({ error: 'invalid_request' });
     const { paymentId, callbackUrl } = input.data;
     refundCalls.set(paymentId, (refundCalls.get(paymentId) ?? 0) + 1);
-    const charge = charges.get(paymentId);
+    const charge = await findCharge(paymentId);
     if (!charge) return res.status(404).json({ error: 'unknown_payment' });
 
-    const existing = refunds.get(paymentId);
+    const existing = await findRefund(paymentId);
     if (existing) return res.status(200).json({ refundId: existing, status: 'accepted' });
 
     const refundId = `rf_${randomUUID()}`;
     refunds.set(paymentId, refundId);
+    await opts.store?.saveRefund(paymentId, refundId);
     emit(
       callbackUrl,
       {

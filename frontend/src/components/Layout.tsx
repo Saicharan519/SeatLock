@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router';
 import { useAuth } from '../lib/auth';
 import { useCity } from '../lib/city';
+import { WakeBanner } from './WakeBanner';
 
 export function Logo({ className = '' }: { className?: string }) {
   return (
@@ -158,6 +159,7 @@ export function Layout() {
 
   return (
     <div className="grain flex min-h-screen flex-col">
+      <WakeBanner />
       <header className="sticky top-0 z-40 border-b border-white/5 bg-night/80 backdrop-blur-xl">
         <div className="mx-auto flex h-16 max-w-7xl items-center gap-4 px-4 sm:gap-8 sm:px-6">
           <Logo />

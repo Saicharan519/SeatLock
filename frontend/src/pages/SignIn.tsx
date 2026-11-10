@@ -3,9 +3,19 @@ import { Link, Navigate, useSearchParams } from 'react-router';
 import { Logo } from '../components/Layout';
 import { tmdbSize } from '../components/Poster';
 import { Button, Notice, Spinner } from '../components/ui';
+import { WakeBanner } from '../components/WakeBanner';
 import { api, ApiError } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { useLoad, useTitle } from '../lib/hooks';
+
+/**
+ * A shared account for visitors (set at build time on the hosted site). Not a secret: it is
+ * a normal USER account, shown to anyone who opens the sign-in page.
+ */
+const DEMO =
+  import.meta.env.VITE_DEMO_EMAIL && import.meta.env.VITE_DEMO_PASSWORD
+    ? { email: import.meta.env.VITE_DEMO_EMAIL, password: import.meta.env.VITE_DEMO_PASSWORD }
+    : null;
 
 const field =
   'w-full rounded-xl border border-line-2 bg-night-2 px-4 py-3 text-sm text-screen outline-none transition-colors placeholder:text-faint focus:border-marigold';
@@ -55,13 +65,18 @@ export function SignIn() {
   const safeNext = next && next.startsWith('/') && !next.startsWith('//') ? next : '/';
   if (user) return <Navigate to={safeNext} replace />;
 
-  const submit = async (e: FormEvent) => {
+  const submit = (e: FormEvent) => {
     e.preventDefault();
+    return attempt(() =>
+      mode === 'signin' ? signIn(email, password) : signUp(name, email, password),
+    );
+  };
+
+  const attempt = async (action: () => Promise<void>) => {
     setError(null);
     setBusy(true);
     try {
-      if (mode === 'signin') await signIn(email, password);
-      else await signUp(name, email, password);
+      await action();
     } catch (err) {
       const e = err as ApiError;
       setError(
@@ -82,6 +97,7 @@ export function SignIn() {
 
   return (
     <div className="grain relative isolate flex min-h-screen flex-col">
+      <WakeBanner />
       <PosterWall />
       <div className="px-6 py-6 sm:px-10">
         <Logo />
@@ -107,6 +123,24 @@ export function SignIn() {
               ? 'Sign in to hold your seats. Your picks are saved.'
               : 'Pick your seats. Nobody else can take them while you pay.'}
           </p>
+
+          {DEMO && (
+            <div className="mb-6 rounded-2xl border border-marigold/40 bg-marigold/5 p-4">
+              <div className="text-sm font-semibold">Just looking around?</div>
+              <p className="mt-1 text-xs text-dim">
+                Use the shared demo account: no sign-up, test payments only.
+              </p>
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={busy}
+                onClick={() => attempt(() => signIn(DEMO.email, DEMO.password))}
+                className="mt-3 w-full"
+              >
+                Continue with the demo account
+              </Button>
+            </div>
+          )}
 
           <form onSubmit={submit} className="space-y-4" noValidate>
             {mode === 'signup' && (
