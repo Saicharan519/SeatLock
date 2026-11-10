@@ -263,6 +263,20 @@ These were part of the design from the start but had not been written down with 
 | P12 | Tests delete gateway keys and proxy secrets from the environment                              | Trusting the environment                           | A developer's `.env` with real Cashfree keys changed test results                                                                                                                                                               |
 | P9  | A fixed **test phone number** for Cashfree orders                                             | Collecting phone numbers                           | Cashfree requires one; the demo doesn't need real ones                                                                                                                                                                          |
 
+## Q. Admin dashboard (Phase 15)
+
+| #   | Decision                                                                                | Rejected                                      | Why                                                                                                                                                    |
+| --- | --------------------------------------------------------------------------------------- | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Q1  | Admin pages inside the same React app, under `/admin`, with their own shell             | A separate admin app; a generic admin kit     | Same auth, API client and components (the seat-map preview is the customer's own); the role is enforced by the API, the page guard is only courtesy    |
+| Q2  | **One overview endpoint**, seven queries in parallel                                    | One endpoint per tile; a cached summary table | One round trip; every number computed by the database from live data, so it's never stale                                                              |
+| Q3  | Movie edit = PATCH of any subset; the edit schema has **no defaults**; slug fixed       | `createMovieSchema.partial()`                 | Zod 4 applies defaults inside `.partial()`: a title edit would have wiped synopsis, cast and posters. Slugs are in shared links                        |
+| Q4  | Column names for the UPDATE come from a **whitelist**                                   | Keys from the request body                    | No request key ever reaches SQL text                                                                                                                   |
+| Q5  | A show can be deleted **only if it never had a booking**                                | Cancel-and-refund everyone; soft delete       | Bookings and payments are history. Cancelling a show with refunds is a bigger feature than this phase needs                                            |
+| Q6  | Delete locks the show `FOR UPDATE`; a hold that loses the race maps the FK error to 404 | Locking the show in every hold                | The foreign key's `FOR KEY SHARE` already serialises the two; holds stay lock-free on the show row. Only the loser's error needed handling (was a 500) |
+| Q7  | A movie's new running time doesn't move existing shows                                  | Recomputing `ends_at`                         | Could create overlaps the exclusion constraint would refuse mid-update; past schedules shouldn't change                                                |
+| Q8  | Screen layouts are **create-only**                                                      | Editable layouts                              | Seats of every show are generated from the layout and bookings point at them                                                                           |
+| Q9  | Revenue = CONFIRMED bookings, by the IST day the booking was made                       | Including refunded bookings; payment time     | Matches what was actually kept; booking and confirmation are normally seconds apart                                                                    |
+
 ## Known limitations (documented, not bugs)
 
 - **Crash between the pay commit and the gateway call:** the payment stays INITIATED and the gateway never sees it. A same-key retry replays the 202 without calling the gateway. The hold expires, and the sweep fails the payment after 15 minutes.
@@ -273,6 +287,10 @@ These were part of the design from the start but had not been written down with 
 - **While Redis is down there is no rate limiting at all** (fail open, by design), logged as a warning every 10 s.
 - **ioredis keeps a process alive for about 2.3 s after a refused connection** (measured on Windows and Linux). No effect on requests; only relevant to test teardown.
 - **The admin retry is per event**; there's no bulk retry.
+- **A show with bookings can't be removed or cancelled** from the dashboard; cancelling a show (refunding everyone) isn't built.
+- **Screens can't be edited or deleted** once created, and theatres can't be deleted (Q8).
+- **The admin bookings list shows the latest 50 matches**; no pagination.
+- **The dashboard reads live data on every load**; fine at demo scale, a busy chain would want pre-aggregated daily figures.
 - **Delivery is at-least-once**, never exactly-once. Both consumers are idempotent (unique `event_id`; the gateway dedupes refunds per payment).
 - **A slow-but-alive handler** whose lease expires can overlap with a second worker running the same event. Harmless because consumers are idempotent, and the fencing token keeps only one result.
 - **Notification latency** is up to one worker tick (5 s), since the outbox is polled rather than pushed.

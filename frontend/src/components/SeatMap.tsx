@@ -81,9 +81,12 @@ export function SeatMap({
                     <span className="h-px flex-1 bg-gradient-to-r from-transparent to-line-2" />
                     <span className="font-mono text-[11px] tracking-[0.25em] text-dim uppercase">
                       {categoryName(row.category)}{' '}
-                      <span className="text-screen">
-                        {formatMoney(priceOf.get(row.category) ?? 0)}
-                      </span>
+                      {/* No price in the admin's screen-layout preview: prices are per show */}
+                      {priceOf.has(row.category) && (
+                        <span className="text-screen">
+                          {formatMoney(priceOf.get(row.category)!)}
+                        </span>
+                      )}
                     </span>
                     <span className="h-px flex-1 bg-gradient-to-l from-transparent to-line-2" />
                   </div>

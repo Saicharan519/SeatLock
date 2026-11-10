@@ -1,6 +1,6 @@
 # SeatLock progress
 
-Last updated: 2026-11-10, after Phase 14. Cashfree sandbox verified locally and live (webhook reached Render). **Live at https://seat-lock-ten.vercel.app**. **v1 (Phases 0–10) complete. v2 in progress** ([prd-v2.md](prd-v2.md)): turning the backend into a full movie-booking product.
+Last updated: 2026-11-10, after Phase 15 (admin dashboard at `/admin`). **Live at https://seat-lock-ten.vercel.app**. **v1 (Phases 0–10) complete. v2 in progress** ([prd-v2.md](prd-v2.md)): turning the backend into a full movie-booking product.
 
 ## v2 phases
 
@@ -11,11 +11,11 @@ Last updated: 2026-11-10, after Phase 14. Cashfree sandbox verified locally and 
 | 13 Frontend rebuild                      | Done                                     | `9a48cd1`                               | 118 / 118 (backend unchanged); frontend build         | [phase-13](phases/phase-13-frontend.md)       |
 | 13.5 First deployment                    | Done                                     | `80bc0a5`, `e9fe297`, records `4a23904` | 127 / 127; live booking + refund verified             | [phase-13.5](phases/phase-13.5-deployment.md) |
 | 14 Payments v2 (Cashfree sandbox + mock) | Done (local real sandbox + live webhook) | `fa714f0`, fixes `e78ed31`              | 138 (137 locally; 1 Docker-clock flake, see write-up) | [phase-14](phases/phase-14-payments.md)       |
-| 15 Admin dashboard                       | Next                                     |                                         |                                                       |                                               |
-| 16 Hardening                             | Planned                                  |                                         |                                                       |                                               |
+| 15 Admin dashboard                       | Done (uncommitted)                       |                                         | 150 (local: 1 Docker-clock flake, passed on re-run)   | [phase-15](phases/phase-15-admin.md)          |
+| 16 Hardening                             | Next                                     |                                         |                                                       |                                               |
 | 17 Interview pack                        | Planned                                  |                                         |                                                       |                                               |
 
-**Tests since v2:** 138 in 22 files (Phase 13.5 added hosting.test.ts, 9; Phase 14 added cashfree.test.ts, 11). Phase 12 added catalog.test.ts (14) and seed.test.ts (2), added 2 schema tests, and moved the 3 admin-show tests from shows.test.ts into catalog.test.ts (rewritten for the new model). No test was deleted.
+**Tests since v2:** 150 in 23 files (Phase 13.5 added hosting.test.ts, 9; Phase 14 added cashfree.test.ts, 11; Phase 15 added adminDashboard.test.ts, 12). Phase 12 added catalog.test.ts (14) and seed.test.ts (2), added 2 schema tests, and moved the 3 admin-show tests from shows.test.ts into catalog.test.ts (rewritten for the new model). No test was deleted.
 
 ## v1 phases
 

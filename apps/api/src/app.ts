@@ -9,6 +9,7 @@ import {
 } from '@seatlock/shared';
 import type { ApiConfig } from './config/env';
 import { createAdminController } from './controllers/adminController';
+import { createAdminService } from './services/adminService';
 import { createAuthController } from './controllers/authController';
 import { createCatalogController } from './controllers/catalogController';
 import { createBookingController } from './controllers/bookingController';
@@ -106,7 +107,10 @@ export function createApp({ pool, config, logger, gateway, redis = null }: AppDe
     cashfreeService,
   );
   const webhookController = createWebhookController(webhookService, cashfreeService);
-  const adminController = createAdminController(createOutboxAdminService(pool, logger));
+  const adminController = createAdminController(
+    createOutboxAdminService(pool, logger),
+    createAdminService(pool, { timezone: config.APP_TIMEZONE }),
+  );
 
   const app = express();
   app.disable('x-powered-by');

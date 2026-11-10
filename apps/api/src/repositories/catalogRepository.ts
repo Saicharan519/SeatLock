@@ -295,3 +295,59 @@ export async function findScreen(
   );
   return rows[0];
 }
+
+/** Columns an admin may edit, by API field name. The slug stays fixed: it's in shared URLs. */
+const MOVIE_EDITABLE: Record<string, string> = {
+  title: 'title',
+  synopsis: 'synopsis',
+  genres: 'genres',
+  language: 'language',
+  durationMinutes: 'duration_minutes',
+  certificate: 'certificate',
+  rating: 'rating',
+  director: 'director',
+  cast: 'cast_members',
+  posterUrl: 'poster_url',
+  backdropUrl: 'backdrop_url',
+  releaseDate: 'release_date',
+};
+
+/** Updates the given fields only. Column names come from the whitelist above, never input. */
+export async function updateMovie(
+  db: Queryable,
+  id: string,
+  fields: Record<string, unknown>,
+): Promise<boolean> {
+  const entries = Object.entries(fields).filter(([k, v]) => k in MOVIE_EDITABLE && v !== undefined);
+  if (entries.length === 0) {
+    return (await db.query(`SELECT 1 FROM movies WHERE id = $1`, [id])).rowCount === 1;
+  }
+  const sets = entries.map(([k], i) => `${MOVIE_EDITABLE[k]} = $${i + 2}`);
+  const { rowCount } = await db.query(`UPDATE movies SET ${sets.join(', ')} WHERE id = $1`, [
+    id,
+    ...entries.map(([, v]) => v),
+  ]);
+  return rowCount === 1;
+}
+
+/**
+ * Deletes a show with its prices and seats, but only if nobody ever booked it: bookings,
+ * payments and refunds point at it, and those records are kept. Run inside a transaction.
+ *
+ * Locking the show row FOR UPDATE conflicts with the FOR KEY SHARE lock that inserting a
+ * booking takes on its show (the foreign key), so a hold racing this delete either commits
+ * first (and is seen here, so the delete is refused) or waits and then finds no show.
+ */
+export async function deleteUnbookedShow(
+  client: PoolClient,
+  id: string,
+): Promise<'deleted' | 'not_found' | 'has_bookings'> {
+  const show = await client.query(`SELECT id FROM shows WHERE id = $1 FOR UPDATE`, [id]);
+  if (show.rowCount === 0) return 'not_found';
+  const booked = await client.query(`SELECT 1 FROM bookings WHERE show_id = $1 LIMIT 1`, [id]);
+  if (booked.rowCount) return 'has_bookings';
+  await client.query(`DELETE FROM seats WHERE show_id = $1`, [id]);
+  await client.query(`DELETE FROM show_prices WHERE show_id = $1`, [id]);
+  await client.query(`DELETE FROM shows WHERE id = $1`, [id]);
+  return 'deleted';
+}

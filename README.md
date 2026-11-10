@@ -20,6 +20,8 @@ PostgreSQL enforces it with row locks, guarded updates and constraints, not just
 
 **https://seat-lock-ten.vercel.app** (use "Continue with the demo account" on the sign-in page). Pay with **Cashfree in test mode** (UPI `testsuccess@gocash`) or the simulated gateway; no real money moves.
 
+An **admin dashboard** at `/admin` (admin accounts only) shows revenue, occupancy and everyone's bookings, and manages movies, theatres (with a visual seat-layout editor), showtimes and failed background events. [Phase 15 write-up](docs/phases/phase-15-admin.md).
+
 It runs on free plans (Vercel, Render, Neon, Upstash; see [docs/deploy.md](docs/deploy.md)), so the backend sleeps when idle and the first visit can take up to a minute. How it was deployed and verified: [Phase 13.5 write-up](docs/phases/phase-13.5-deployment.md).
 
 ## Try it in one command
@@ -356,7 +358,12 @@ npm run loadtest:steady
 | GET    | `/api/bookings/me`, `/api/bookings/:id`                        | History and detail                                                                            |
 | POST   | `/api/bookings/:id/cancel`                                     | Whole-booking cancellation with refund                                                        |
 | POST   | `/api/webhooks/payment`                                        | HMAC-signed gateway callbacks                                                                 |
+| GET    | `/api/admin/overview`                                          | Admin only; revenue, tickets, occupancy, 7-day revenue, gateways, top movies, latest bookings |
+| GET    | `/api/admin/bookings?status=&q=`                               | Admin only; everyone's bookings, by state, customer email or ticket reference                 |
+| GET    | `/api/admin/theatres`, `/api/admin/shows?theatreId=&date=`     | Admin only; theatres with screens and layouts; one theatre's schedule for a day (IST)         |
 | POST   | `/api/admin/movies`, `/api/admin/theatres`                     | Admin only; create catalogue entries                                                          |
+| PATCH  | `/api/admin/movies/:id`                                        | Admin only; edit any of a movie's fields (not its slug)                                       |
+| DELETE | `/api/admin/shows/:id`                                         | Admin only; remove a show nobody has booked (409 otherwise)                                   |
 | POST   | `/api/admin/theatres/:id/screens`                              | Admin only; a screen with its seat layout (rows, categories, aisles)                          |
 | POST   | `/api/admin/shows`                                             | Admin only; a showtime with a price per category; its seats are generated from the layout     |
 | GET    | `/api/admin/outbox-events?status=FAILED`                       | Admin only; inspect outbox events                                                             |

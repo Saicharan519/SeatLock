@@ -246,7 +246,19 @@ Invoke-RestMethod -Method Post -Uri http://localhost:4000/__control -ContentType
 
 ---
 
-## 5. Phone layout
+## 5. The admin dashboard (`/admin`)
+
+Sign out, then sign in as the admin: `admin@seatlock.local` with the local seed password (`admin12345` locally, see the README; on the live site, the `SEED_ADMIN_PASSWORD` you set on Render). The account menu now has **Admin dashboard**.
+
+- [ ] **Overview**: revenue and tickets match your confirmed bookings; hover the bars to read each day; a red banner appears if a background event failed
+- [ ] **Bookings**: filter by state; search part of an email, or a ticket's 8-character reference
+- [ ] **Movies**: edit one movie's rating, save, and check its public page; the slug can't change
+- [ ] **Theatres & screens**: add a theatre; add a screen, change rows, categories and aisles and watch the preview; type an aisle after the last seat and see the problem listed
+- [ ] **Showtimes**: pick the theatre and a day; add a show at a time that overlaps another on the same screen (a clear "Clash" message), then at a free time (it appears in the schedule); delete it; a show with bookings has its Delete greyed out
+- [ ] **Background events**: failed events show their error and attempt count; Retry sends one back to the worker
+- [ ] Signed in as a customer, `/admin` says "Admins only"
+
+## 6. Phone layout
 
 In Chrome, press **F12**, then the phone icon (Toggle device toolbar), and pick a phone.
 
@@ -256,7 +268,7 @@ In Chrome, press **F12**, then the phone icon (Toggle device toolbar), and pick 
 
 ---
 
-## 6. The other way to run it: the full Docker stack
+## 7. The other way to run it: the full Docker stack
 
 This is how an interviewer (or a server) runs it: one command, no Node needed.
 
@@ -274,7 +286,7 @@ docker compose up --build
 
 ---
 
-## 7. Shutting down
+## 8. Shutting down
 
 - **Ctrl+C** in the terminal running `npm run dev`
 - `docker compose stop` stops Postgres and Redis (your data stays)

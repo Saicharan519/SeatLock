@@ -86,26 +86,45 @@ export const layoutSchema = z
 
 const url = z.url({ protocol: /^https?$/ }).max(500);
 
+/** A movie's fields, without defaults (an edit must not reset fields it didn't send). */
+const movieFields = {
+  title: z.string().trim().min(1).max(200),
+  synopsis: z.string().trim().max(4000),
+  genres: z.array(z.string().trim().min(1).max(40)).max(10),
+  language: z.string().trim().min(1).max(40),
+  durationMinutes: z.number().int().min(1).max(600),
+  certificate: z.enum(['U', 'UA', 'A']),
+  rating: z.number().min(0).max(10).nullable(),
+  director: z.string().trim().max(200),
+  cast: z.array(z.string().trim().min(1).max(100)).max(30),
+  posterUrl: url.nullable(),
+  backdropUrl: url.nullable(),
+  releaseDate: calendarDate,
+};
+
 export const createMovieSchema = z.object({
+  ...movieFields,
   /** Derived from the title when omitted */
   slug: z
     .string()
     .regex(/^[a-z0-9]+(-[a-z0-9]+)*$/, 'Slugs are lowercase words joined by hyphens')
     .max(120)
     .optional(),
-  title: z.string().trim().min(1).max(200),
-  synopsis: z.string().trim().max(4000).default(''),
-  genres: z.array(z.string().trim().min(1).max(40)).max(10).default([]),
-  language: z.string().trim().min(1).max(40),
-  durationMinutes: z.number().int().min(1).max(600),
-  certificate: z.enum(['U', 'UA', 'A']),
-  rating: z.number().min(0).max(10).nullable().default(null),
-  director: z.string().trim().max(200).default(''),
-  cast: z.array(z.string().trim().min(1).max(100)).max(30).default([]),
-  posterUrl: url.nullable().default(null),
-  backdropUrl: url.nullable().default(null),
-  releaseDate: calendarDate,
+  synopsis: movieFields.synopsis.default(''),
+  genres: movieFields.genres.default([]),
+  rating: movieFields.rating.default(null),
+  director: movieFields.director.default(''),
+  cast: movieFields.cast.default([]),
+  posterUrl: movieFields.posterUrl.default(null),
+  backdropUrl: movieFields.backdropUrl.default(null),
 });
+
+/** Any subset of a movie's fields, except the slug (it's in links people have shared). */
+export const updateMovieSchema = z
+  .object(movieFields)
+  .partial()
+  .strict()
+  .refine((o) => Object.keys(o).length > 0, 'Nothing to update');
 
 export const createTheatreSchema = z.object({
   name: z.string().trim().min(1).max(200),

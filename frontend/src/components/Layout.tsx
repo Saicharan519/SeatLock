@@ -121,6 +121,7 @@ function AccountMenu() {
           {[
             ['/bookings', 'My bookings'],
             ['/profile', 'Profile'],
+            ...(user.role === 'ADMIN' ? [['/admin', 'Admin dashboard']] : []),
           ].map(([to, label]) => (
             <Link
               key={to}

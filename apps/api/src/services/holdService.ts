@@ -86,6 +86,10 @@ export function createHoldService(pool: Pool, config: ApiConfig) {
               'You already have an active hold for this show',
             );
           }
+          // An admin deleted this (never-booked) show while we were holding (see deleteUnbookedShow)
+          if ((err as { constraint?: string }).constraint === 'bookings_show_id_fkey') {
+            throw new AppError('NOT_FOUND', 'Show not found');
+          }
           throw err;
         }
 

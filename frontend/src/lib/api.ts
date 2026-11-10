@@ -105,6 +105,102 @@ export interface Booking {
   payment: { id: string; status: PaymentStatus; provider: PaymentProvider } | null;
 }
 
+// ---- Admin ----
+
+export interface AdminBooking {
+  id: string;
+  status: BookingStatus;
+  totalAmount: number;
+  createdAt: string;
+  expiresAt: string;
+  user: { name: string; email: string };
+  movieTitle: string;
+  theatre: { name: string; city: string };
+  screenName: string;
+  startsAt: string;
+  seats: string[];
+  payment: { status: PaymentStatus; provider: PaymentProvider } | null;
+}
+
+export interface AdminOverview {
+  timezone: string;
+  totals: {
+    confirmedBookings: number;
+    revenue: number;
+    ticketsSold: number;
+    activeHolds: number;
+    refundsPending: number;
+    customers: number;
+    upcomingShows: number;
+    upcomingSeats: number;
+    upcomingBooked: number;
+    upcomingOccupancy: number;
+  };
+  revenueByDay: { day: string; bookings: number; revenue: number }[];
+  bookingsByStatus: Partial<Record<BookingStatus, number>>;
+  revenueByProvider: { provider: PaymentProvider; bookings: number; revenue: number }[];
+  outbox: Partial<Record<OutboxStatus, number>>;
+  topMovies: { id: string; slug: string; title: string; tickets: number; revenue: number }[];
+  recentBookings: AdminBooking[];
+}
+
+export interface AdminScreen {
+  id: string;
+  name: string;
+  seatCount: number;
+  layout: { rows: LayoutRow[] };
+  categories: string[];
+  upcomingShows: number;
+}
+
+export interface AdminTheatre extends Theatre {
+  screens: AdminScreen[];
+}
+
+export interface AdminShow {
+  id: string;
+  startsAt: string;
+  endsAt: string;
+  screen: { id: string; name: string };
+  movie: { id: string; title: string };
+  prices: Price[];
+  totalSeats: number;
+  bookedSeats: number;
+  bookings: number;
+}
+
+export type OutboxStatus = 'PENDING' | 'PROCESSING' | 'PUBLISHED' | 'FAILED';
+
+export interface OutboxEvent {
+  id: string;
+  eventType: string;
+  aggregateType: string;
+  aggregateId: string;
+  status: OutboxStatus;
+  retryCount: number;
+  lastError: string | null;
+  payload: unknown;
+  createdAt: string;
+  nextAttemptAt: string;
+  publishedAt: string | null;
+}
+
+/** The editable fields of a movie (the slug is fixed once created). */
+export interface MovieInput {
+  title: string;
+  synopsis: string;
+  genres: string[];
+  language: string;
+  durationMinutes: number;
+  certificate: 'U' | 'UA' | 'A';
+  rating: number | null;
+  director: string;
+  cast: string[];
+  posterUrl: string | null;
+  backdropUrl: string | null;
+  releaseDate: string;
+}
+
 /** An error from the API, keeping its code (SEAT_UNAVAILABLE, ...) for the UI to act on. */
 export class ApiError extends Error {
   constructor(
@@ -270,4 +366,34 @@ export const api = {
   booking: (id: string) => request<{ booking: Booking }>('GET', `/bookings/${id}`),
   myBookings: () => request<{ bookings: Booking[] }>('GET', '/bookings/me'),
   cancel: (id: string) => request<{ status: string }>('POST', `/bookings/${id}/cancel`),
+
+  admin: {
+    overview: () => request<AdminOverview>('GET', '/admin/overview'),
+    bookings: (f: { status?: string; q?: string }) =>
+      request<{ bookings: AdminBooking[] }>('GET', `/admin/bookings${query(f)}`),
+    theatres: () => request<{ theatres: AdminTheatre[] }>('GET', '/admin/theatres'),
+    shows: (theatreId: string, date: string) =>
+      request<{ shows: AdminShow[] }>('GET', `/admin/shows${query({ theatreId, date })}`),
+    createMovie: (movie: MovieInput) =>
+      request<{ movie: MovieDetail }>('POST', '/admin/movies', { body: movie }),
+    updateMovie: (id: string, fields: Partial<MovieInput>) =>
+      request<{ movie: MovieDetail }>('PATCH', `/admin/movies/${id}`, { body: fields }),
+    createTheatre: (t: { name: string; city: string; address: string }) =>
+      request<{ theatre: Theatre }>('POST', '/admin/theatres', { body: t }),
+    createScreen: (theatreId: string, name: string, layout: { rows: LayoutRow[] }) =>
+      request<{ screen: AdminScreen }>('POST', `/admin/theatres/${theatreId}/screens`, {
+        body: { name, layout },
+      }),
+    createShow: (s: {
+      movieId: string;
+      screenId: string;
+      startsAt: string;
+      prices: Record<string, number>;
+    }) => request<{ show: Show }>('POST', '/admin/shows', { body: s }),
+    deleteShow: (id: string) => request<void>('DELETE', `/admin/shows/${id}`),
+    outbox: (status: OutboxStatus) =>
+      request<{ events: OutboxEvent[] }>('GET', `/admin/outbox-events${query({ status })}`),
+    retryOutbox: (id: string) =>
+      request<{ event: OutboxEvent }>('POST', `/admin/outbox-events/${id}/retry`),
+  },
 };

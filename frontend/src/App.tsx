@@ -3,6 +3,15 @@ import { createBrowserRouter, Navigate, RouterProvider, useLocation } from 'reac
 import { Layout } from './components/Layout';
 import { AuthProvider, useAuth } from './lib/auth';
 import { CityProvider } from './lib/city';
+import { AdminLayout } from './pages/admin/AdminLayout';
+import { Bookings as AdminBookings } from './pages/admin/Bookings';
+import { Events } from './pages/admin/Events';
+import { MovieForm } from './pages/admin/MovieForm';
+import { Movies as AdminMovies } from './pages/admin/Movies';
+import { Overview } from './pages/admin/Overview';
+import { ScreenEditor } from './pages/admin/ScreenEditor';
+import { Showtimes } from './pages/admin/Showtimes';
+import { Theatres } from './pages/admin/Theatres';
 import { BookingPage } from './pages/BookingPage';
 import { Home } from './pages/Home';
 import { MoviePage } from './pages/MoviePage';
@@ -32,6 +41,22 @@ const auth = (el: ReactNode) => <RequireAuth>{el}</RequireAuth>;
 
 const router = createBrowserRouter([
   { path: '/signin', element: <SignIn /> },
+  {
+    // Its own shell: no customer header, a section nav instead. ADMIN role enforced by the API.
+    path: '/admin',
+    element: <AdminLayout />,
+    children: [
+      { index: true, element: <Overview /> },
+      { path: 'bookings', element: <AdminBookings /> },
+      { path: 'movies', element: <AdminMovies /> },
+      { path: 'movies/new', element: <MovieForm /> },
+      { path: 'movies/:id', element: <MovieForm /> },
+      { path: 'theatres', element: <Theatres /> },
+      { path: 'theatres/:theatreId/screens/new', element: <ScreenEditor /> },
+      { path: 'showtimes', element: <Showtimes /> },
+      { path: 'events', element: <Events /> },
+    ],
+  },
   {
     element: <Layout />,
     children: [

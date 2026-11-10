@@ -219,6 +219,31 @@ export function createCatalogService(pool: Pool, opts: { timezone: string }) {
     },
 
     /**
+     * Edits a movie's details. Existing shows keep their end times: a show's length was fixed
+     * when it was scheduled, and moving it could make it overlap the next one on its screen.
+     */
+    async updateMovie(id: string, fields: Record<string, unknown>) {
+      if (!(await catalog.updateMovie(pool, id, fields))) {
+        throw new AppError('NOT_FOUND', 'Movie not found');
+      }
+      return this.getMovie(id);
+    },
+
+    /** Removes a show scheduled by mistake. Refused once anyone has booked it. */
+    async deleteShow(id: string) {
+      const result = await withTransaction(pool, (client) =>
+        catalog.deleteUnbookedShow(client, id),
+      );
+      if (result === 'not_found') throw new AppError('NOT_FOUND', 'Show not found');
+      if (result === 'has_bookings') {
+        throw new AppError(
+          'INVALID_STATE',
+          'This show has bookings, so it can’t be deleted: those records must be kept',
+        );
+      }
+    },
+
+    /**
      * Creates a showtime with its prices and seats in one transaction. Prices must cover
      * exactly the categories in the screen's layout. The database refuses a show that
      * overlaps another on the same screen (exclusion constraint), reported as 409.

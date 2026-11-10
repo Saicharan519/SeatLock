@@ -10,6 +10,7 @@ import {
   movieListQuery,
   showListQuery,
   showtimesQuery,
+  updateMovieSchema,
   uuidParams,
 } from '../validators/catalog';
 
@@ -61,6 +62,17 @@ export function createCatalogController(catalog: CatalogService) {
     res.status(201).json({ movie: await catalog.createMovie(createMovieSchema.parse(req.body)) });
   };
 
+  const updateMovie: RequestHandler = async (req, res) => {
+    const { id } = parseOr404(uuidParams, req.params, 'Movie');
+    res.json({ movie: await catalog.updateMovie(id, updateMovieSchema.parse(req.body)) });
+  };
+
+  const deleteShow: RequestHandler = async (req, res) => {
+    const { id } = parseOr404(uuidParams, req.params, 'Show');
+    await catalog.deleteShow(id);
+    res.status(204).end();
+  };
+
   const createTheatre: RequestHandler = async (req, res) => {
     res
       .status(201)
@@ -87,6 +99,8 @@ export function createCatalogController(catalog: CatalogService) {
     getShow,
     seatMap,
     createMovie,
+    updateMovie,
+    deleteShow,
     createTheatre,
     createScreen,
     createShow,

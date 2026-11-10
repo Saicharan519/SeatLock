@@ -178,7 +178,7 @@ export function bookingPill(status: BookingStatus, payment?: PaymentStatus | nul
 export function StatusPill({ pill }: { pill: Pill }) {
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${PILL_TONES[pill.tone]}`}
+      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold whitespace-nowrap ${PILL_TONES[pill.tone]}`}
     >
       <span className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden="true" />
       {pill.label}
