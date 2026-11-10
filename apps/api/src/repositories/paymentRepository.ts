@@ -2,6 +2,8 @@ import type { PoolClient } from 'pg';
 import type { Queryable } from '@seatlock/db';
 import { logTransition } from '../utils/transitionLog';
 
+export type PaymentProvider = 'MOCK' | 'CASHFREE';
+
 export type PaymentStatus = 'INITIATED' | 'SUCCESS' | 'FAILED' | 'REFUND_REQUIRED' | 'REFUNDED';
 
 export interface PaymentRow {
@@ -9,17 +11,19 @@ export interface PaymentRow {
   booking_id: string;
   amount: number;
   status: PaymentStatus;
+  provider: PaymentProvider;
 }
 
 export async function insertInitiatedPayment(
   client: PoolClient,
   bookingId: string,
   amount: number,
+  provider: PaymentProvider = 'MOCK',
 ): Promise<PaymentRow> {
   const { rows } = await client.query<PaymentRow>(
-    `INSERT INTO payments (booking_id, amount, status) VALUES ($1, $2, 'INITIATED')
-     RETURNING id, booking_id, amount, status`,
-    [bookingId, amount],
+    `INSERT INTO payments (booking_id, amount, status, provider) VALUES ($1, $2, 'INITIATED', $3)
+     RETURNING id, booking_id, amount, status, provider`,
+    [bookingId, amount, provider],
   );
   return rows[0]!;
 }
@@ -41,7 +45,7 @@ export async function lockPayment(
   paymentId: string,
 ): Promise<PaymentRow | undefined> {
   const { rows } = await client.query<PaymentRow>(
-    `SELECT id, booking_id, amount, status FROM payments WHERE id = $1 FOR UPDATE`,
+    `SELECT id, booking_id, amount, status, provider FROM payments WHERE id = $1 FOR UPDATE`,
     [paymentId],
   );
   return rows[0];

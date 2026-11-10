@@ -1,10 +1,12 @@
 import { createPool } from '@seatlock/db';
-import { createHttpGatewayClient, createLogger } from '@seatlock/shared';
+import { createCashfreeClient, createHttpGatewayClient, createLogger } from '@seatlock/shared';
+import { createWebhookService } from '../../api/src/services/webhookService';
 import { loadWorkerConfig } from './config';
 import { createConsumers } from './consumers';
 import { cleanupIdempotencyKeys } from './jobs/cleanupIdempotencyKeys';
 import { expireHolds } from './jobs/expireHolds';
 import { maintainCatalog } from './jobs/maintainCatalog';
+import { reconcileCashfree } from './jobs/reconcileCashfree';
 import { sweepStuckPayments } from './jobs/sweepStuckPayments';
 import { processOutbox } from './outbox/processOutbox';
 
@@ -22,11 +24,21 @@ export function startWorker(): { stop: () => Promise<void> } {
     acquireTimeoutMs: config.PG_POOL_ACQUIRE_TIMEOUT_MS,
   });
 
+  const cashfree =
+    config.CASHFREE_APP_ID && config.CASHFREE_SECRET_KEY
+      ? createCashfreeClient({
+          appId: config.CASHFREE_APP_ID,
+          secretKey: config.CASHFREE_SECRET_KEY,
+          baseUrl: config.CASHFREE_BASE_URL,
+        })
+      : null;
+
   const outboxOptions = {
     consumers: createConsumers({
       pool,
       gateway: createHttpGatewayClient(config.GATEWAY_URL, config.GATEWAY_TIMEOUT_MS),
       webhookUrl: new URL('/api/webhooks/payment', config.API_PUBLIC_URL).toString(),
+      cashfree,
     }),
     logger,
     leaseSeconds: config.OUTBOX_LEASE_SECONDS,
@@ -45,6 +57,20 @@ export function startWorker(): { stop: () => Promise<void> } {
     },
     { name: 'cleanupIdempotencyKeys', run: () => cleanupIdempotencyKeys(pool) },
   ];
+
+  if (cashfree) {
+    // The same state machine the API's webhooks use (its secret only matters for signed webhooks)
+    const { apply } = createWebhookService(pool, 'unused-by-reconciliation', logger);
+    let lastRun = 0;
+    jobs.push({
+      name: 'reconcileCashfree',
+      run: async () => {
+        if (Date.now() - lastRun < config.CASHFREE_RECONCILE_SECONDS * 1000) return 0;
+        lastRun = Date.now();
+        return reconcileCashfree(pool, cashfree, apply, logger);
+      },
+    });
+  }
 
   // Off by default (tests, local dev); hosted demos turn it on so showtimes never run out
   if (config.CATALOG_MAINTENANCE_HOURS > 0) {

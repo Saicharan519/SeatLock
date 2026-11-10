@@ -140,16 +140,16 @@ What the free plans require of the code (Phase 13.5):
 
 ## 9. Roadmap
 
-| Phase | Name                           | Outcome                                                                                                  |
-| ----- | ------------------------------ | -------------------------------------------------------------------------------------------------------- |
-| 11    | Dev workflow and understanding | `npm run dev`; both workflows verified; test suite run; a guided first booking with database checks      |
-| 12    | Product data model             | Movies, theatres, screens, showtimes, seat categories; migrations, API, rolling seed with ~12 movies     |
-| 13    | Frontend rebuild               | Landing, discovery, movie page, seat selection, checkout, ticket, bookings, profile                      |
-| 13.5  | First deployment               | Live on Vercel + Render + Neon + Upstash (free), all-in-one mode, sleep-safe, hardened for public access |
-| 14    | Payments v2                    | `PaymentProvider`, Razorpay test mode, sandbox checkout UX, both providers tested                        |
-| 15    | Admin dashboard                | Movies, shows, stats, outbox UI                                                                          |
-| 16    | Hardening                      | Cookie auth, proxy fix, secrets, end-to-end browser tests, final deployment                              |
-| 17    | Interview pack                 | Architecture walkthrough, decision defence, Q&A, demo video script                                       |
+| Phase | Name                           | Outcome                                                                                                                                                                                    |
+| ----- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 11    | Dev workflow and understanding | `npm run dev`; both workflows verified; test suite run; a guided first booking with database checks                                                                                        |
+| 12    | Product data model             | Movies, theatres, screens, showtimes, seat categories; migrations, API, rolling seed with ~12 movies                                                                                       |
+| 13    | Frontend rebuild               | Landing, discovery, movie page, seat selection, checkout, ticket, bookings, profile                                                                                                        |
+| 13.5  | First deployment               | Live on Vercel + Render + Neon + Upstash (free), all-in-one mode, sleep-safe, hardened for public access                                                                                   |
+| 14    | Payments v2                    | `PaymentProvider` idea realised as one engine + per-gateway translation: **Cashfree sandbox** (replacing Razorpay, see decisions P1) + the simulated gateway; webhooks plus reconciliation |
+| 15    | Admin dashboard                | Movies, shows, stats, outbox UI                                                                                                                                                            |
+| 16    | Hardening                      | Cookie auth, proxy fix, secrets, end-to-end browser tests, final deployment                                                                                                                |
+| 17    | Interview pack                 | Architecture walkthrough, decision defence, Q&A, demo video script                                                                                                                         |
 
 If time runs short, cut in this order: admin dashboard extras, then cookie auth. Never the frontend, the deployment or the tests.
 

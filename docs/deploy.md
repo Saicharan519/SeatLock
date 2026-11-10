@@ -119,3 +119,29 @@ Push to `main`: Render and Vercel both rebuild automatically. A new database mig
 - API responses are `Cache-Control: no-store`, so Vercel's edge never caches anyone's bookings.
 - The mock gateway listens on `127.0.0.1` only, and its failure-mode switch is off.
 - There is no default admin password in production; the admin exists only if `SEED_ADMIN_PASSWORD` is set.
+
+## Optional: Cashfree test payments
+
+The checkout can also offer **Cashfree in sandbox (test) mode**: a real payment gateway's hosted checkout, with test cards and UPI, and no real money. Without these settings only the simulated gateway is shown.
+
+1. Create a free account at https://merchant.cashfree.com (email and phone). You don't need to finish KYC or enter a PAN: test mode works before activation.
+2. Click **Switch to Test** (top right; the yellow "Test Environment" banner must show), then **Developers → Payment Gateway → API Keys → Generate API Keys**.
+3. In **Render → seatlock-api → Environment**, add:
+
+| Variable              | Value                                                             |
+| --------------------- | ----------------------------------------------------------------- |
+| `CASHFREE_APP_ID`     | The App ID (it starts with `TEST`; the API refuses anything else) |
+| `CASHFREE_SECRET_KEY` | The Secret Key                                                    |
+
+`SITE_URL` (where Cashfree sends the customer back) is already set by `render.yaml`. Webhooks go to `https://<your-render-address>/api/webhooks/cashfree` automatically; nothing to configure in Cashfree's dashboard. Refund results are picked up by the worker asking Cashfree, so refund webhooks are optional too.
+
+4. Save. Render redeploys. The checkout now shows **Cashfree (test mode)** as the default.
+
+**Sandbox test details** (from Cashfree's docs):
+
+| Method | Use                                                                         |
+| ------ | --------------------------------------------------------------------------- |
+| UPI    | `testsuccess@gocash` (succeeds), `testfailure@gocash` (fails)               |
+| Card   | `4706 1312 1121 2123`, expiry `03/28`, CVV `123`, name `Test`, OTP `111000` |
+
+If a card detail is refused, check the current list on Cashfree's [sandbox test data page](https://www.cashfree.com/docs/payments/online/resources/sandbox-environment).

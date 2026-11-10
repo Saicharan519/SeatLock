@@ -61,7 +61,11 @@ describe('payments end to end (FR-08, FR-11, FR-15, FR-16)', () => {
 
     const res = await pay(rahul.token, bookingId);
     expect(res.status).toBe(202);
-    expect(res.body).toEqual({ paymentId: expect.any(String), status: 'INITIATED' });
+    expect(res.body).toEqual({
+      paymentId: expect.any(String),
+      status: 'INITIATED',
+      provider: 'MOCK',
+    });
 
     await waitForStatus(rahul.token, bookingId, 'CONFIRMED');
     const booking = await getBooking(rahul.token, bookingId);

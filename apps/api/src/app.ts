@@ -1,6 +1,7 @@
 import express, { type Express } from 'express';
 import type { Pool } from 'pg';
 import {
+  createCashfreeClient,
   createHttpGatewayClient,
   type GatewayClient,
   type Logger,
@@ -28,6 +29,7 @@ import { webhooksRouter } from './routes/webhooks';
 import { createAuthService } from './services/authService';
 import { createCatalogService } from './services/catalogService';
 import { createBookingService } from './services/bookingService';
+import { createCashfreeService } from './services/cashfreeService';
 import { createHoldService } from './services/holdService';
 import { createOutboxAdminService } from './services/outboxAdminService';
 import { createPaymentService } from './services/paymentService';
@@ -75,13 +77,35 @@ export function createApp({ pool, config, logger, gateway, redis = null }: AppDe
     createHoldService(pool, config),
     config.MAX_SEATS_PER_HOLD,
   );
+  const webhookService = createWebhookService(pool, config.WEBHOOK_SECRET, logger);
+  // Cashfree (sandbox) only when its keys are configured; the simulated gateway is always on
+  const cashfreeService =
+    config.CASHFREE_APP_ID && config.CASHFREE_SECRET_KEY
+      ? createCashfreeService({
+          pool,
+          cashfree: createCashfreeClient({
+            appId: config.CASHFREE_APP_ID,
+            secretKey: config.CASHFREE_SECRET_KEY,
+            baseUrl: config.CASHFREE_BASE_URL,
+          }),
+          secretKey: config.CASHFREE_SECRET_KEY,
+          apply: webhookService.apply,
+          logger,
+          notifyUrl:
+            config.CASHFREE_NOTIFY_URL ??
+            (config.RENDER_EXTERNAL_URL
+              ? new URL('/api/webhooks/cashfree', config.RENDER_EXTERNAL_URL).toString()
+              : undefined),
+          siteUrl: config.SITE_URL,
+          customerPhone: config.CASHFREE_CUSTOMER_PHONE,
+        })
+      : null;
   const bookingController = createBookingController(
     createBookingService(pool),
-    createPaymentService(pool, config, gatewayClient, logger),
+    createPaymentService(pool, config, gatewayClient, logger, cashfreeService),
+    cashfreeService,
   );
-  const webhookController = createWebhookController(
-    createWebhookService(pool, config.WEBHOOK_SECRET, logger),
-  );
+  const webhookController = createWebhookController(webhookService, cashfreeService);
   const adminController = createAdminController(createOutboxAdminService(pool, logger));
 
   const app = express();

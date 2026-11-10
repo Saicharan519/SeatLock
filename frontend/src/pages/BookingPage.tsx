@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import { Link, useNavigate, useParams } from 'react-router';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import { Poster } from '../components/Poster';
 import { Ticket } from '../components/Ticket';
 import {
@@ -12,7 +12,8 @@ import {
   Skeleton,
   Spinner,
 } from '../components/ui';
-import { api, ApiError, type Booking } from '../lib/api';
+import { api, ApiError, type Booking, type PaymentProvider } from '../lib/api';
+import { openCashfreeCheckout } from '../lib/cashfree';
 import { categoryName, formatCountdown, formatMoney, formatWhen, seatOrder } from '../lib/format';
 import { useNow, usePolling, useTitle } from '../lib/hooks';
 
@@ -38,8 +39,8 @@ function viewOf(b: Booking, now: number): View {
  * One idempotency key per booking, kept for the session: tapping Pay twice, or retrying
  * after a dropped connection, sends the same key, so the server charges once.
  */
-function payKey(bookingId: string): string {
-  const k = `seatlock.pay.${bookingId}`;
+function payKey(bookingId: string, provider: PaymentProvider): string {
+  const k = `seatlock.pay.${bookingId}${provider === 'MOCK' ? '' : '.' + provider}`;
   let key = sessionStorage.getItem(k);
   if (!key) {
     key = crypto.randomUUID();
@@ -183,6 +184,42 @@ function Summary({ booking }: { booking: Booking }) {
   );
 }
 
+function MethodOption({
+  selected,
+  onSelect,
+  title,
+  text,
+}: {
+  selected: boolean;
+  onSelect: () => void;
+  title: string;
+  text: string;
+}) {
+  return (
+    <button
+      type="button"
+      role="radio"
+      aria-checked={selected}
+      onClick={onSelect}
+      className={`flex w-full items-start gap-3 rounded-2xl border p-4 text-left transition-colors ${
+        selected ? 'border-marigold/60 bg-marigold/5' : 'border-line-2 hover:border-dim'
+      }`}
+    >
+      <span
+        className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full border-2 ${
+          selected ? 'border-marigold' : 'border-line-2'
+        }`}
+      >
+        {selected && <span className="h-2 w-2 rounded-full bg-marigold" />}
+      </span>
+      <span className="text-sm">
+        <span className="block font-semibold">{title}</span>
+        <span className="mt-0.5 block text-xs leading-relaxed text-dim">{text}</span>
+      </span>
+    </button>
+  );
+}
+
 function Panel({ children }: { children: ReactNode }) {
   return (
     <section className="rounded-3xl border border-line bg-night-2 p-6 sm:p-8">{children}</section>
@@ -199,6 +236,10 @@ export function BookingPage() {
   const [paying, setPaying] = useState(false);
   const [declined, setDeclined] = useState(false);
   const [processingSince, setProcessingSince] = useState<number | null>(null);
+  const [providers, setProviders] = useState<PaymentProvider[]>(['MOCK']);
+  const [method, setMethod] = useState<PaymentProvider>('MOCK');
+  const [opening, setOpening] = useState(false);
+  const [searchParams] = useSearchParams();
 
   const load = useCallback(async () => {
     const { booking } = await api.booking(bookingId!);
@@ -209,11 +250,40 @@ export function BookingPage() {
     load().catch(() => setNotFound(true));
   }, [load]);
 
+  useEffect(() => {
+    api
+      .paymentOptions()
+      .then(({ providers }) => {
+        setProviders(providers);
+        if (providers.includes('CASHFREE')) setMethod('CASHFREE');
+      })
+      .catch(() => undefined);
+  }, []);
+
+  // Back from Cashfree's page (?order_id=...): ask for the outcome right away
+  useEffect(() => {
+    if (searchParams.get('order_id')) {
+      api
+        .refreshPayment(bookingId!)
+        .then(load)
+        .catch(() => undefined);
+    }
+  }, [searchParams, bookingId, load]);
+
   const view = booking ? (declined ? 'failed' : viewOf(booking, now)) : null;
   useTitle(view === 'confirmed' ? 'Your ticket' : 'Checkout');
 
   // While a payment is in flight, poll until the gateway's answer lands
   usePolling(load, POLL_MS, view === 'processing');
+  // Cashfree: also ask Cashfree directly every few seconds, in case its webhook is slow
+  const viaCashfree = booking?.payment?.provider === 'CASHFREE';
+  usePolling(
+    async () => {
+      await api.refreshPayment(bookingId!);
+    },
+    5000,
+    view === 'processing' && viaCashfree,
+  );
   useEffect(() => {
     if (view === 'processing' && processingSince === null) setProcessingSince(Date.now());
   }, [view, processingSince]);
@@ -222,9 +292,10 @@ export function BookingPage() {
     setPaying(true);
     setError(null);
     try {
-      await api.pay(bookingId!, payKey(bookingId!));
+      const res = await api.pay(bookingId!, payKey(bookingId!, method), method);
       setProcessingSince(Date.now());
       await load();
+      if (res.provider === 'CASHFREE') await openCheckout(res.paymentSessionId);
     } catch (err) {
       const e = err as ApiError;
       if (e.code === 'PAYMENT_GATEWAY_ERROR') setDeclined(true);
@@ -232,6 +303,22 @@ export function BookingPage() {
       else setError(e.message);
     } finally {
       setPaying(false);
+    }
+  };
+
+  /** Opens (or re-opens) Cashfree's checkout, then asks SeatLock for the real outcome */
+  const openCheckout = async (sessionId?: string) => {
+    setOpening(true);
+    setError(null);
+    try {
+      const id = sessionId ?? (await api.paymentSession(bookingId!)).paymentSessionId;
+      await openCashfreeCheckout(id);
+      await api.refreshPayment(bookingId!).catch(() => undefined);
+      await load();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setOpening(false);
     }
   };
 
@@ -320,16 +407,21 @@ export function BookingPage() {
               Sandbox
             </span>
           </div>
-          <div className="mt-3 flex items-start gap-3 rounded-2xl border border-marigold/50 bg-marigold/5 p-4">
-            <span className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full border-2 border-marigold">
-              <span className="h-2 w-2 rounded-full bg-marigold" />
-            </span>
-            <div className="text-sm">
-              <div className="font-semibold">Test payment</div>
-              <div className="mt-0.5 text-xs leading-relaxed text-dim">
-                A simulated payment gateway. No real money moves and no card details are asked for.
-              </div>
-            </div>
+          <div className="mt-3 space-y-2" role="radiogroup" aria-label="Payment method">
+            {providers.includes('CASHFREE') && (
+              <MethodOption
+                selected={method === 'CASHFREE'}
+                onSelect={() => setMethod('CASHFREE')}
+                title="Cashfree (test mode)"
+                text="A real payment gateway in sandbox mode: UPI, cards and net banking with test details. No real money moves."
+              />
+            )}
+            <MethodOption
+              selected={method === 'MOCK'}
+              onSelect={() => setMethod('MOCK')}
+              title="Simulated gateway"
+              text="SeatLock's own test gateway: pays instantly, no details asked for."
+            />
           </div>
         </div>
         <Button onClick={pay} disabled={paying} className="mt-6 w-full py-3.5 text-base">
@@ -354,6 +446,23 @@ export function BookingPage() {
             Processing
           </h2>
           <Tracker done={1} />
+          {viaCashfree && (
+            <div className="mt-6 space-y-2">
+              <Button onClick={() => openCheckout()} disabled={opening} className="w-full">
+                {opening ? (
+                  <>
+                    <Spinner /> Opening Cashfree…
+                  </>
+                ) : (
+                  'Complete payment in Cashfree'
+                )}
+              </Button>
+              <p className="text-xs leading-relaxed text-dim">
+                Closed the Cashfree window before paying? Open it again: it's the same payment, so
+                you can't be charged twice.
+              </p>
+            </div>
+          )}
           <p className="mt-6 text-xs leading-relaxed text-faint">
             {slow
               ? 'This is taking longer than usual. You can leave this page: the result will appear in My bookings.'

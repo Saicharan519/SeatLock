@@ -1,5 +1,5 @@
 import type { Pool } from 'pg';
-import type { GatewayClient } from '@seatlock/shared';
+import { cashfreeRefundId, type CashfreeClient, type GatewayClient } from '@seatlock/shared';
 import type { Consumer } from '../outbox/processOutbox';
 
 export interface ConsumerDeps {
@@ -7,6 +7,8 @@ export interface ConsumerDeps {
   gateway: GatewayClient;
   /** Where the gateway sends refund webhooks (the API's webhook endpoint) */
   webhookUrl: string;
+  /** Present only when Cashfree keys are configured */
+  cashfree?: CashfreeClient | null;
 }
 
 /**
@@ -33,9 +35,29 @@ export function bookingConfirmedConsumer({ pool }: ConsumerDeps): Consumer {
  * by payment id: a repeat call returns the original refund instead of paying out twice.
  * The gateway confirms with a refund.succeeded webhook, which moves the payment to REFUNDED.
  */
-export function refundRequiredConsumer({ gateway, webhookUrl }: ConsumerDeps): Consumer {
+export function refundRequiredConsumer({
+  pool,
+  gateway,
+  webhookUrl,
+  cashfree,
+}: ConsumerDeps): Consumer {
   return async (event) => {
     const p = event.payload as { paymentId: string; amount: number };
+    const { rows } = await pool.query<{ provider: string }>(
+      `SELECT provider FROM payments WHERE id = $1`,
+      [p.paymentId],
+    );
+    if (rows[0]?.provider === 'CASHFREE') {
+      // Idempotent by our refund id (one refund per payment). Cashfree confirms it later; the
+      // reconciliation job (or a refund webhook) then moves the payment to REFUNDED.
+      if (!cashfree) throw new Error('Cashfree refund needed but Cashfree is not configured');
+      await cashfree.createRefund({
+        orderId: p.paymentId,
+        refundId: cashfreeRefundId(p.paymentId),
+        amountPaise: p.amount,
+      });
+      return;
+    }
     await gateway.refund({ paymentId: p.paymentId, amount: p.amount, callbackUrl: webhookUrl });
   };
 }

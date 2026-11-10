@@ -26,6 +26,7 @@ interface BookingViewRow {
   screen_name: string;
   payment_id: string | null;
   payment_status: string | null;
+  payment_provider: string | null;
   items: { label: string; category: string; price: number }[];
 }
 
@@ -36,7 +37,7 @@ const BOOKING_VIEW_SQL = `
          m.certificate, m.language, m.duration_minutes,
          t.name AS theatre_name, t.city AS theatre_city, t.address AS theatre_address,
          sc.name AS screen_name,
-         p.id AS payment_id, p.status AS payment_status,
+         p.id AS payment_id, p.status AS payment_status, p.provider AS payment_provider,
          COALESCE(
            (SELECT json_agg(json_build_object('label', st.seat_label,
                                               'category', st.category,
@@ -75,7 +76,9 @@ const toView = (r: BookingViewRow) => ({
     theatre: { name: r.theatre_name, city: r.theatre_city, address: r.theatre_address },
     screen: { name: r.screen_name },
   },
-  payment: r.payment_id ? { id: r.payment_id, status: r.payment_status } : null,
+  payment: r.payment_id
+    ? { id: r.payment_id, status: r.payment_status, provider: r.payment_provider }
+    : null,
 });
 
 export function createBookingService(pool: Pool) {

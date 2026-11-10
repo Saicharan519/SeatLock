@@ -18,7 +18,7 @@ PostgreSQL enforces it with row locks, guarded updates and constraints, not just
 
 ## Live demo
 
-**https://seat-lock-ten.vercel.app** (use "Continue with the demo account" on the sign-in page; payments are a sandbox, no real money).
+**https://seat-lock-ten.vercel.app** (use "Continue with the demo account" on the sign-in page). Pay with **Cashfree in test mode** (UPI `testsuccess@gocash`) or the simulated gateway; no real money moves.
 
 It runs on free plans (Vercel, Render, Neon, Upstash; see [docs/deploy.md](docs/deploy.md)), so the backend sleeps when idle and the first visit can take up to a minute. How it was deployed and verified: [Phase 13.5 write-up](docs/phases/phase-13.5-deployment.md).
 

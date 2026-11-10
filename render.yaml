@@ -49,6 +49,17 @@ services:
         value: '5'
       - key: CATALOG_MAINTENANCE_HOURS
         value: '6'
+      # Cashfree sandbox (test mode) keys: Developers > API Keys in Cashfree's TEST environment.
+      # The App ID must start with TEST (the API refuses anything else). Without these, only
+      # the simulated gateway is offered. Webhooks go to RENDER_EXTERNAL_URL/api/webhooks/cashfree
+      # (Render sets RENDER_EXTERNAL_URL itself).
+      - key: CASHFREE_APP_ID
+        sync: false
+      - key: CASHFREE_SECRET_KEY
+        sync: false
+      # Where Cashfree sends the customer back after checkout
+      - key: SITE_URL
+        value: https://seat-lock-ten.vercel.app
       # The mock gateway's failure-mode switch stays off on the public site
       - key: GATEWAY_CONTROL_ENABLED
         value: 'false'

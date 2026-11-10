@@ -1,5 +1,6 @@
 export type SeatStatus = 'AVAILABLE' | 'HELD' | 'BOOKED';
 export type BookingStatus = 'PENDING' | 'CONFIRMED' | 'CANCELLED' | 'EXPIRED' | 'FAILED';
+export type PaymentProvider = 'MOCK' | 'CASHFREE';
 export type PaymentStatus = 'INITIATED' | 'SUCCESS' | 'FAILED' | 'REFUND_REQUIRED' | 'REFUNDED';
 
 export interface User {
@@ -101,7 +102,7 @@ export interface Booking {
     theatre: { name: string; city: string; address: string };
     screen: { name: string };
   };
-  payment: { id: string; status: PaymentStatus } | null;
+  payment: { id: string; status: PaymentStatus; provider: PaymentProvider } | null;
 }
 
 /** An error from the API, keeping its code (SEAT_UNAVAILABLE, ...) for the UI to act on. */
@@ -251,10 +252,21 @@ export const api = {
     }),
   release: (bookingId: string) =>
     request<{ status: string }>('POST', `/holds/${bookingId}/release`),
-  pay: (bookingId: string, idempotencyKey: string) =>
-    request<{ paymentId: string; status: string }>('POST', `/bookings/${bookingId}/pay`, {
+  pay: (bookingId: string, idempotencyKey: string, provider: PaymentProvider = 'MOCK') =>
+    request<{
+      paymentId: string;
+      status: string;
+      provider: PaymentProvider;
+      paymentSessionId?: string;
+    }>('POST', `/bookings/${bookingId}/pay`, {
       idempotencyKey,
+      body: provider === 'MOCK' ? undefined : { provider },
     }),
+  paymentOptions: () => request<{ providers: PaymentProvider[] }>('GET', '/payments/options'),
+  paymentSession: (bookingId: string) =>
+    request<{ paymentSessionId: string }>('POST', `/bookings/${bookingId}/payment/session`),
+  refreshPayment: (bookingId: string) =>
+    request<{ result: string }>('POST', `/bookings/${bookingId}/payment/refresh`),
   booking: (id: string) => request<{ booking: Booking }>('GET', `/bookings/${id}`),
   myBookings: () => request<{ bookings: Booking[] }>('GET', '/bookings/me'),
   cancel: (id: string) => request<{ status: string }>('POST', `/bookings/${id}/cancel`),

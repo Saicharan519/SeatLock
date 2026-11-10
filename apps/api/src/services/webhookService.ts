@@ -6,7 +6,7 @@ import {
   releaseLockedSeats,
   withTransaction,
 } from '@seatlock/db';
-import { verifyWebhook, type Logger } from '@seatlock/shared';
+import { verifyWebhook, type Logger, type PaymentEvent } from '@seatlock/shared';
 import * as bookings from '../repositories/bookingRepository';
 import { insertOutboxEvent } from '../repositories/outboxRepository';
 import * as payments from '../repositories/paymentRepository';
@@ -23,7 +23,8 @@ const eventSchema = z.object({
   }),
   createdAt: z.string(),
 });
-type GatewayEvent = z.infer<typeof eventSchema>;
+/** Any gateway's event, translated into SeatLock's own vocabulary */
+type GatewayEvent = PaymentEvent;
 
 /** What handling an event did. Returned to the caller and logged. */
 export type WebhookResult =
@@ -204,6 +205,58 @@ export function createWebhookService(pool: Pool, webhookSecret: string, logger: 
     return 'refunded';
   }
 
+  /**
+   * Applies one gateway event to the payment state machine. Every source ends here: the mock
+   * gateway's webhooks, Cashfree's webhooks, and the reconciliation job that asks Cashfree
+   * directly. Events are deduplicated by id in the same transaction as their effects, so the
+   * same payment reported by a webhook AND by reconciliation is applied once.
+   */
+  async function apply(event: GatewayEvent, rawText: string): Promise<WebhookResult> {
+    const result = await withTransaction(pool, async (client) => {
+      // 2. Dedupe. Same transaction as the effects, so a crash rolls both back and the
+      //    gateway's redelivery is processed normally.
+      const fresh = await client.query(
+        `INSERT INTO webhook_events (provider_event_id, event_type, payload)
+         VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`,
+        [event.id, event.type, rawText],
+      );
+      if (fresh.rowCount === 0) return 'duplicate' as const;
+
+      // 3. Lock booking, then payment (R3)
+      const bookingId = await payments.findBookingIdOfPayment(client, event.data.paymentId);
+      if (!bookingId) return 'ignored' as const;
+      const booking = (await bookings.lockBooking(client, bookingId))!;
+      const payment = (await payments.lockPayment(client, event.data.paymentId))!;
+      if (event.data.amount !== payment.amount) {
+        logger.error(
+          {
+            eventId: event.id,
+            paymentId: payment.id,
+            expected: payment.amount,
+            got: event.data.amount,
+          },
+          'webhook amount mismatch, ignoring',
+        );
+        return 'ignored' as const;
+      }
+
+      switch (event.type) {
+        case 'payment.succeeded':
+          return onPaymentSucceeded(client, booking, payment, event);
+        case 'payment.failed':
+          return onPaymentFailed(client, booking, payment);
+        case 'refund.succeeded':
+          return onRefundSucceeded(client, payment, event);
+      }
+    });
+
+    logger.info(
+      { eventId: event.id, type: event.type, paymentId: event.data.paymentId, result },
+      'webhook handled',
+    );
+    return result;
+  }
+
   return {
     async handle(rawBody: Buffer, signature: string | undefined): Promise<WebhookResult> {
       // 1. Authenticate before parsing anything
@@ -217,50 +270,10 @@ export function createWebhookService(pool: Pool, webhookSecret: string, logger: 
         throw new AppError('VALIDATION_ERROR', 'Malformed webhook payload');
       }
 
-      const result = await withTransaction(pool, async (client) => {
-        // 2. Dedupe. Same transaction as the effects, so a crash rolls both back and the
-        //    gateway's redelivery is processed normally.
-        const fresh = await client.query(
-          `INSERT INTO webhook_events (provider_event_id, event_type, payload)
-           VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`,
-          [event.id, event.type, rawBody.toString('utf8')],
-        );
-        if (fresh.rowCount === 0) return 'duplicate' as const;
-
-        // 3. Lock booking, then payment (R3)
-        const bookingId = await payments.findBookingIdOfPayment(client, event.data.paymentId);
-        if (!bookingId) return 'ignored' as const;
-        const booking = (await bookings.lockBooking(client, bookingId))!;
-        const payment = (await payments.lockPayment(client, event.data.paymentId))!;
-        if (event.data.amount !== payment.amount) {
-          logger.error(
-            {
-              eventId: event.id,
-              paymentId: payment.id,
-              expected: payment.amount,
-              got: event.data.amount,
-            },
-            'webhook amount mismatch, ignoring',
-          );
-          return 'ignored' as const;
-        }
-
-        switch (event.type) {
-          case 'payment.succeeded':
-            return onPaymentSucceeded(client, booking, payment, event);
-          case 'payment.failed':
-            return onPaymentFailed(client, booking, payment);
-          case 'refund.succeeded':
-            return onRefundSucceeded(client, payment, event);
-        }
-      });
-
-      logger.info(
-        { eventId: event.id, type: event.type, paymentId: event.data.paymentId, result },
-        'webhook handled',
-      );
-      return result;
+      return apply(event, rawBody.toString('utf8'));
     },
+
+    apply,
   };
 }
 

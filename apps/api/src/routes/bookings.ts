@@ -13,5 +13,18 @@ export function bookingsRouter(
   router.get('/bookings/:id', authenticate, controller.get);
   router.post('/bookings/:id/pay', authenticate, limitByUser, controller.pay);
   router.post('/bookings/:id/cancel', authenticate, controller.cancel);
+  router.get('/payments/options', controller.paymentOptions);
+  router.post(
+    '/bookings/:id/payment/session',
+    authenticate,
+    limitByUser,
+    controller.paymentSession,
+  );
+  router.post(
+    '/bookings/:id/payment/refresh',
+    authenticate,
+    limitByUser,
+    controller.refreshPayment,
+  );
   return router;
 }

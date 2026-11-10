@@ -15,6 +15,12 @@ const workerEnvSchema = baseEnvSchema.extend({
   /** Base URL of the API, for the refund webhook callback */
   API_PUBLIC_URL: z.url().default('http://localhost:3000'),
   /** Tops up showtimes and prunes old unbooked shows every N hours. 0 = off */
+  /** Cashfree sandbox keys: refunds for Cashfree payments, and reconciliation */
+  CASHFREE_APP_ID: z.string().min(1).optional(),
+  CASHFREE_SECRET_KEY: z.string().min(1).optional(),
+  CASHFREE_BASE_URL: z.url().optional(),
+  /** How often open Cashfree payments and refunds are checked with Cashfree (backstop for webhooks) */
+  CASHFREE_RECONCILE_SECONDS: z.coerce.number().int().min(5).default(30),
   CATALOG_MAINTENANCE_HOURS: z.coerce.number().min(0).default(0),
   /** How many days ahead the top-up schedules showtimes */
   CATALOG_DAYS: z.coerce.number().int().min(1).max(30).default(7),

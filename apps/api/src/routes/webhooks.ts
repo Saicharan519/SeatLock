@@ -12,5 +12,10 @@ export function webhooksRouter(controller: ReturnType<typeof createWebhookContro
     express.raw({ type: () => true, limit: '100kb' }),
     controller.payment,
   );
+  router.post(
+    '/webhooks/cashfree',
+    express.raw({ type: () => true, limit: '100kb' }),
+    controller.cashfree,
+  );
   return router;
 }

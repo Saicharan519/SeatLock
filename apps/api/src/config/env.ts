@@ -35,6 +35,24 @@ const apiEnvSchema = baseEnvSchema.extend({
    * x-real-ip). Only honoured together with ORIGIN_SECRET, because otherwise anyone could
    * send the header themselves and pick the IP the rate limiter sees.
    */
+  /**
+   * Cashfree (sandbox only). With both keys set, customers can choose Cashfree's test
+   * checkout as well as the simulated gateway.
+   */
+  CASHFREE_APP_ID: z.string().min(1).optional(),
+  CASHFREE_SECRET_KEY: z.string().min(1).optional(),
+  /** Defaults to Cashfree's sandbox; overridable only for tests (a fake Cashfree server) */
+  CASHFREE_BASE_URL: z.url().optional(),
+  /** Where Cashfree sends payment webhooks. Defaults to Render's public URL when hosted */
+  CASHFREE_NOTIFY_URL: z.url().optional(),
+  RENDER_EXTERNAL_URL: z.url().optional(),
+  /** The website, for Cashfree's return link after checkout */
+  SITE_URL: z.url().optional(),
+  /** Cashfree requires a customer phone; SeatLock doesn't collect one, so a test number is sent */
+  CASHFREE_CUSTOMER_PHONE: z
+    .string()
+    .regex(/^d{10}$/)
+    .default('9999999999'),
   CLIENT_IP_HEADER: z
     .string()
     .regex(/^[a-z0-9-]+$/)
@@ -45,6 +63,20 @@ export type ApiConfig = z.infer<typeof apiEnvSchema>;
 
 export function loadApiConfig(): ApiConfig {
   const config = loadEnv(apiEnvSchema);
+  // A Cashfree misconfiguration switches Cashfree off (loudly) rather than taking the whole
+  // site down: the simulated gateway keeps working
+  const cashfreeProblem =
+    Boolean(config.CASHFREE_APP_ID) !== Boolean(config.CASHFREE_SECRET_KEY)
+      ? 'set both CASHFREE_APP_ID and CASHFREE_SECRET_KEY, or neither'
+      : config.CASHFREE_APP_ID && !config.CASHFREE_APP_ID.startsWith('TEST')
+        ? // Sandbox keys start with TEST; refusing anything else keeps real money out of reach
+          'CASHFREE_APP_ID is not a sandbox (TEST...) key: SeatLock never takes real payments'
+        : null;
+  if (cashfreeProblem) {
+    console.error(`Cashfree disabled: ${cashfreeProblem}`);
+    config.CASHFREE_APP_ID = undefined;
+    config.CASHFREE_SECRET_KEY = undefined;
+  }
   if (config.CLIENT_IP_HEADER && !config.ORIGIN_SECRET) {
     console.error('CLIENT_IP_HEADER is only safe with ORIGIN_SECRET set');
     process.exit(1);
