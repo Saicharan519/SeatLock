@@ -478,9 +478,11 @@ export function BookingPage() {
             `Continue to Cashfree · ${formatMoney(booking.totalAmount)}`
           )}
         </Button>
-        <Button variant="ghost" onClick={release} className="mt-2 w-full">
-          Release seats
-        </Button>
+        {/* No "Release seats" here: with a payment open at Cashfree the API refuses a release
+            (the customer could still pay), so the button could only ever fail */}
+        <p className="mt-4 text-center text-xs text-faint">
+          Changed your mind? Just leave: the seats are released when the timer runs out.
+        </p>
       </Panel>
     ),
     processing: (

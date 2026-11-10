@@ -61,8 +61,9 @@ export function SignIn() {
   useTitle(mode === 'signin' ? 'Sign in' : 'Create account');
 
   const next = params.get('next');
-  // Only same-site paths, so a crafted link can't bounce someone to another site after sign-in
-  const safeNext = next && next.startsWith('/') && !next.startsWith('//') ? next : '/';
+  // Only same-site paths, so a crafted link can't bounce someone to another site after sign-in.
+  // "//evil.com" and "/\evil.com" both mean another host to a browser.
+  const safeNext = next && /^\/(?![/\\])/.test(next) ? next : '/';
   if (user) return <Navigate to={safeNext} replace />;
 
   const submit = (e: FormEvent) => {

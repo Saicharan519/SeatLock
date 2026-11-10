@@ -2,6 +2,10 @@ node_modules/
 dist/
 coverage/
 .env
+# Any other env file (.env.local, .env.production, ...) holds secrets too
+.env.*
+!.env.example
+*.pem
 *.log
 tests/k6/results/
 tests/k6/data/
@@ -14,3 +18,4 @@ frontend/dist/
 
 # Local editor/tool settings and TypeScript build caches
 *.tsbuildinfo
+.claude/

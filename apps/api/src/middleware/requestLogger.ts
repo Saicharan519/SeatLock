@@ -4,6 +4,12 @@ import type { Logger } from '@seatlock/shared';
 
 const VALID_REQUEST_ID = /^[\w-]{1,64}$/;
 
+/** Query parameters that can hold personal data (the admin booking search takes an email). */
+const PRIVATE_PARAMS = /([?&](?:q|email)=)[^&]*/gi;
+
+/** The URL as logged: path and query, with private parameter values replaced. */
+export const loggableUrl = (url: string) => url.replace(PRIVATE_PARAMS, '$1[REDACTED]');
+
 /**
  * Assigns a request ID (honouring a sane incoming X-Request-Id) and logs each request in one
  * compact line: id, method, URL, status and time. Headers are not logged (they made every
@@ -29,7 +35,7 @@ export function requestLogger(logger: Logger) {
       req: (req: { id: string; method: string; url: string }) => ({
         id: req.id,
         method: req.method,
-        url: req.url,
+        url: loggableUrl(req.url),
       }),
       res: (res: { statusCode: number }) => ({ statusCode: res.statusCode }),
     },

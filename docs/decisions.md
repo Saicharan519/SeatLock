@@ -277,6 +277,18 @@ These were part of the design from the start but had not been written down with 
 | Q8  | Screen layouts are **create-only**                                                      | Editable layouts                              | Seats of every show are generated from the layout and bookings point at them                                                                           |
 | Q9  | Revenue = CONFIRMED bookings, by the IST day the booking was made                       | Including refunded bookings; payment time     | Matches what was actually kept; booking and confirmation are normally seconds apart                                                                    |
 
+## R. Hardening (Phase 16)
+
+Security review first: [security-review.md](security-review.md).
+
+| #   | Decision                                                                                                       | Rejected                                    | Why                                                                                                                            |
+| --- | -------------------------------------------------------------------------------------------------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| R1  | A **Content-Security-Policy** listing exactly what the site loads (self, Cashfree, Google Fonts, HTTPS images) | No CSP; `unsafe-inline` scripts             | Limits what an injected script could load or where it could send data; `frame-ancestors 'none'` stops clickjacking             |
+| R2  | The policy lives in `vercel.json` and `vite preview` reads the same file                                       | Writing it twice; testing only after deploy | A too-strict policy breaks pages silently; this way the exact production policy is tested locally (Cashfree checkout included) |
+| R3  | API responses get `default-src 'none'`, nosniff, frame denial                                                  | Adding the `helmet` package                 | Four headers, all JSON responses; no dependency needed                                                                         |
+| R4  | Private query parameters (`q`, `email`) are redacted in request logs                                           | Dropping query strings from logs            | Other parameters (status, dates) help debugging; the searched email is personal data                                           |
+| R5  | `npm audit` findings in `node-pg-migrate`'s `glob` recorded, not force-fixed                                   | `npm audit fix --force`                     | The fix is a breaking downgrade of the migration tool; the vulnerable code only runs our fixed glob pattern at startup         |
+
 ## Known limitations (documented, not bugs)
 
 - **Crash between the pay commit and the gateway call:** the payment stays INITIATED and the gateway never sees it. A same-key retry replays the 202 without calling the gateway. The hold expires, and the sweep fails the payment after 15 minutes.
@@ -290,6 +302,8 @@ These were part of the design from the start but had not been written down with 
 - **A show with bookings can't be removed or cancelled** from the dashboard; cancelling a show (refunding everyone) isn't built.
 - **Screens can't be edited or deleted** once created, and theatres can't be deleted (Q8).
 - **The admin bookings list shows the latest 50 matches**; no pagination.
+- **`npm audit` reports 3 moderate findings in runtime dependencies** (`node-pg-migrate` → `glob` → `minimatch`, slow regex on glob patterns) and low/moderate ones in dev tools; none reachable from a request (R5).
+- **Registration reveals whether an email has an account** (`EMAIL_TAKEN`); no account lockout beyond the per-IP rate limit; no password reset.
 - **The dashboard reads live data on every load**; fine at demo scale, a busy chain would want pre-aggregated daily figures.
 - **Delivery is at-least-once**, never exactly-once. Both consumers are idempotent (unique `event_id`; the gateway dedupes refunds per payment).
 - **A slow-but-alive handler** whose lease expires can overlap with a second worker running the same event. Harmless because consumers are idempotent, and the fencing token keeps only one result.

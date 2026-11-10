@@ -382,6 +382,7 @@ Errors share one shape: `{ "error": { "code", "message", "requestId" } }`.
 | [docs/decisions.md](docs/decisions.md)                 | Every design decision and trade-off, plus known limitations                 |
 | [docs/results.md](docs/results.md)                     | Measured results and environment                                            |
 | [docs/deploy.md](docs/deploy.md)                       | Free hosting on Vercel + Render + Neon + Upstash, step by step              |
+| [docs/security-review.md](docs/security-review.md)     | Security review: secrets, access control, logs, headers, dependencies       |
 | [docs/manual-test-guide.md](docs/manual-test-guide.md) | Hands-on tour of every page and failure case                                |
 | [docs/demo-script.md](docs/demo-script.md)             | Step-by-step script for the race and late-payment demo                      |
 | [docs/phases/](docs/phases/)                           | A detailed write-up of each phase: what was built, why, and what went wrong |

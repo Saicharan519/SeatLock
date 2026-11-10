@@ -122,6 +122,16 @@ export function createApp({ pool, config, logger, gateway, redis = null }: AppDe
     res.set('Cache-Control', 'no-store');
     next();
   });
+  // Every response is JSON: nothing in it may run, be framed, or be sniffed as another type
+  app.use((_req, res, next) => {
+    res.set({
+      'Content-Security-Policy': "default-src 'none'; frame-ancestors 'none'",
+      'X-Content-Type-Options': 'nosniff',
+      'X-Frame-Options': 'DENY',
+      'Referrer-Policy': 'no-referrer',
+    });
+    next();
+  });
   if (config.ORIGIN_SECRET) app.use('/api', requireOriginSecret(config.ORIGIN_SECRET));
   // Raw body, so it must come before express.json()
   app.use('/api', webhooksRouter(webhookController));
