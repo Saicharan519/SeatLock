@@ -3,7 +3,7 @@
   "routes": [
     {
       "src": "/api/(.*)",
-      "dest": "https://seatlock-api.onrender.com/api/$1",
+      "dest": "https://seatlock-api-zw32.onrender.com/api/$1",
       "transforms": [
         {
           "type": "request.headers",
