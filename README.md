@@ -345,30 +345,30 @@ npm run loadtest:steady
 
 ## API overview
 
-| Method | Path                                                           | Notes                                                                                         |
-| ------ | -------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| POST   | `/api/auth/register`, `/api/auth/login`                        | Returns a JWT. Rate limited: 10/min per IP                                                    |
-| GET    | `/api/movies?city=&genre=&language=&q=`                        | Movies with upcoming-show stats, plus genre and language filter values                        |
-| GET    | `/api/movies/:slug`, `/api/movies/:slug/showtimes?city=&date=` | Movie detail; showtimes for one day (IST), grouped by theatre                                 |
-| GET    | `/api/cities`                                                  | Cities with upcoming shows                                                                    |
-| GET    | `/api/shows`, `/api/shows/:id`, `/api/shows/:id/seats`         | Seat map: screen layout, category prices, live seat status (expired holds count as available) |
-| POST   | `/api/holds`                                                   | Hold 1–6 seats for 5 minutes. Requires `Idempotency-Key`. Holds and pay share 30/min per user |
-| POST   | `/api/holds/:bookingId/release`                                | Give up a hold                                                                                |
-| POST   | `/api/bookings/:id/pay`                                        | `202`; the gateway's webhook confirms. Requires `Idempotency-Key`                             |
-| GET    | `/api/bookings/me`, `/api/bookings/:id`                        | History and detail                                                                            |
-| POST   | `/api/bookings/:id/cancel`                                     | Whole-booking cancellation with refund                                                        |
-| POST   | `/api/webhooks/payment`                                        | HMAC-signed gateway callbacks                                                                 |
-| GET    | `/api/admin/overview`                                          | Admin only; revenue, tickets, occupancy, 7-day revenue, gateways, top movies, latest bookings |
-| GET    | `/api/admin/bookings?status=&q=`                               | Admin only; everyone's bookings, by state, customer email or ticket reference                 |
-| GET    | `/api/admin/theatres`, `/api/admin/shows?theatreId=&date=`     | Admin only; theatres with screens and layouts; one theatre's schedule for a day (IST)         |
-| POST   | `/api/admin/movies`, `/api/admin/theatres`                     | Admin only; create catalogue entries                                                          |
-| PATCH  | `/api/admin/movies/:id`                                        | Admin only; edit any of a movie's fields (not its slug)                                       |
-| DELETE | `/api/admin/shows/:id`                                         | Admin only; remove a show nobody has booked (409 otherwise)                                   |
-| POST   | `/api/admin/theatres/:id/screens`                              | Admin only; a screen with its seat layout (rows, categories, aisles)                          |
-| POST   | `/api/admin/shows`                                             | Admin only; a showtime with a price per category; its seats are generated from the layout     |
-| GET    | `/api/admin/outbox-events?status=FAILED`                       | Admin only; inspect outbox events                                                             |
-| POST   | `/api/admin/outbox-events/:id/retry`                           | Admin only; send a FAILED event back for delivery                                             |
-| GET    | `/api/health`                                                  | Database and Redis reachability (Redis down = `degraded`, still 200)                          |
+| Method | Path                                                           | Notes                                                                                                                                            |
+| ------ | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| POST   | `/api/auth/register`, `/api/auth/login`, `/api/auth/logout`    | Sign in sets an httpOnly session cookie (writes then need `X-SeatLock-Client`); the JWT is also returned for `Bearer` API clients. 10/min per IP |
+| GET    | `/api/movies?city=&genre=&language=&q=`                        | Movies with upcoming-show stats, plus genre and language filter values                                                                           |
+| GET    | `/api/movies/:slug`, `/api/movies/:slug/showtimes?city=&date=` | Movie detail; showtimes for one day (IST), grouped by theatre                                                                                    |
+| GET    | `/api/cities`                                                  | Cities with upcoming shows                                                                                                                       |
+| GET    | `/api/shows`, `/api/shows/:id`, `/api/shows/:id/seats`         | Seat map: screen layout, category prices, live seat status (expired holds count as available)                                                    |
+| POST   | `/api/holds`                                                   | Hold 1–6 seats for 5 minutes. Requires `Idempotency-Key`. Holds and pay share 30/min per user                                                    |
+| POST   | `/api/holds/:bookingId/release`                                | Give up a hold                                                                                                                                   |
+| POST   | `/api/bookings/:id/pay`                                        | `202`; the gateway's webhook confirms. Requires `Idempotency-Key`                                                                                |
+| GET    | `/api/bookings/me`, `/api/bookings/:id`                        | History and detail                                                                                                                               |
+| POST   | `/api/bookings/:id/cancel`                                     | Whole-booking cancellation with refund                                                                                                           |
+| POST   | `/api/webhooks/payment`                                        | HMAC-signed gateway callbacks                                                                                                                    |
+| GET    | `/api/admin/overview`                                          | Admin only; revenue, tickets, occupancy, 7-day revenue, gateways, top movies, latest bookings                                                    |
+| GET    | `/api/admin/bookings?status=&q=`                               | Admin only; everyone's bookings, by state, customer email or ticket reference                                                                    |
+| GET    | `/api/admin/theatres`, `/api/admin/shows?theatreId=&date=`     | Admin only; theatres with screens and layouts; one theatre's schedule for a day (IST)                                                            |
+| POST   | `/api/admin/movies`, `/api/admin/theatres`                     | Admin only; create catalogue entries                                                                                                             |
+| PATCH  | `/api/admin/movies/:id`                                        | Admin only; edit any of a movie's fields (not its slug)                                                                                          |
+| DELETE | `/api/admin/shows/:id`                                         | Admin only; remove a show nobody has booked (409 otherwise)                                                                                      |
+| POST   | `/api/admin/theatres/:id/screens`                              | Admin only; a screen with its seat layout (rows, categories, aisles)                                                                             |
+| POST   | `/api/admin/shows`                                             | Admin only; a showtime with a price per category; its seats are generated from the layout                                                        |
+| GET    | `/api/admin/outbox-events?status=FAILED`                       | Admin only; inspect outbox events                                                                                                                |
+| POST   | `/api/admin/outbox-events/:id/retry`                           | Admin only; send a FAILED event back for delivery                                                                                                |
+| GET    | `/api/health`                                                  | Database and Redis reachability (Redis down = `degraded`, still 200)                                                                             |
 
 Errors share one shape: `{ "error": { "code", "message", "requestId" } }`.
 

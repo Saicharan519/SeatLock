@@ -70,7 +70,7 @@ export function createApp({ pool, config, logger, gateway, redis = null }: AppDe
     logger,
   });
 
-  const authController = createAuthController(createAuthService(pool, config));
+  const authController = createAuthController(createAuthService(pool, config), config);
   const catalogController = createCatalogController(
     createCatalogService(pool, { timezone: config.APP_TIMEZONE }),
   );

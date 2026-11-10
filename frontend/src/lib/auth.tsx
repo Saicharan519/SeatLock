@@ -1,53 +1,51 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
-import { api, setUnauthenticatedHandler, tokenStore, type User } from './api';
+import { api, ApiError, setUnauthenticatedHandler, type User } from './api';
 
 interface AuthState {
   user: User | null;
-  /** True until the stored token has been checked */
+  /** True until the session has been checked */
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (name: string, email: string, password: string) => Promise<void>;
-  signOut: () => void;
+  signOut: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthState | null>(null);
 
 /**
- * Holds the signed-in user. The JWT lives in localStorage (simple, survives reloads; the
- * trade-off is that any XSS could read it, which an httpOnly cookie would prevent).
+ * Holds the signed-in user. The session itself is an httpOnly cookie set by the API, which
+ * page scripts can't read; on load, asking /auth/me is how the page finds out whether that
+ * cookie is (still) valid.
  */
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const signOut = useCallback(() => {
-    tokenStore.clear();
-    setUser(null);
-  }, []);
-
   useEffect(() => {
-    setUnauthenticatedHandler(signOut);
-    if (!tokenStore.get()) {
-      setLoading(false);
-      return;
-    }
+    // The API says the session is gone (expired after an hour, or signed out elsewhere)
+    setUnauthenticatedHandler(() => setUser(null));
     api
       .me()
       .then(({ user }) => setUser(user))
-      .catch(() => signOut())
+      .catch((err) => {
+        // 401 just means "not signed in"; anything else (backend asleep) also leaves you
+        // signed out for now, and the next action will try again
+        if (!(err instanceof ApiError)) console.error(err);
+      })
       .finally(() => setLoading(false));
-  }, [signOut]);
+  }, []);
 
   const signIn = async (email: string, password: string) => {
-    const { user, token } = await api.login(email, password);
-    tokenStore.set(token);
-    setUser(user);
+    setUser((await api.login(email, password)).user);
   };
   const signUp = async (name: string, email: string, password: string) => {
-    const { user, token } = await api.register(name, email, password);
-    tokenStore.set(token);
-    setUser(user);
+    setUser((await api.register(name, email, password)).user);
   };
+  /** Only the API can delete an httpOnly cookie, so signing out is a request */
+  const signOut = useCallback(async () => {
+    await api.logout().catch(() => undefined);
+    setUser(null);
+  }, []);
 
   return (
     <AuthContext.Provider value={{ user, loading, signIn, signUp, signOut }}>

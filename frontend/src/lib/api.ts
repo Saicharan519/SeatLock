@@ -212,12 +212,16 @@ export class ApiError extends Error {
   }
 }
 
-const TOKEN_KEY = 'seatlock.token';
-export const tokenStore = {
-  get: () => localStorage.getItem(TOKEN_KEY),
-  set: (t: string) => localStorage.setItem(TOKEN_KEY, t),
-  clear: () => localStorage.removeItem(TOKEN_KEY),
-};
+/**
+ * The session is an httpOnly cookie the API sets at sign-in: this code never sees the token,
+ * so a script injected into the page couldn't steal it. The browser sends the cookie with
+ * every /api request (same origin). Every request also carries this header, which the API
+ * requires on cookie-authenticated writes: another site can't make a browser add it (CSRF).
+ */
+const CLIENT_HEADER = { 'X-SeatLock-Client': 'web' };
+
+/** Earlier versions kept the token in localStorage; remove any left behind. */
+localStorage.removeItem('seatlock.token');
 
 /** Called when the API says the session is no longer valid. Set by the auth provider. */
 let onUnauthenticated = () => {};
@@ -278,8 +282,7 @@ async function requestOnce<T>(
   opts: { body?: unknown; idempotencyKey?: string } = {},
 ): Promise<T> {
   const headers: Record<string, string> = {};
-  const token = tokenStore.get();
-  if (token) headers.Authorization = `Bearer ${token}`;
+  Object.assign(headers, CLIENT_HEADER);
   if (opts.body !== undefined) headers['Content-Type'] = 'application/json';
   if (opts.idempotencyKey) headers['Idempotency-Key'] = opts.idempotencyKey;
 
@@ -297,7 +300,8 @@ async function requestOnce<T>(
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     const err = (data as { error?: { code?: string; message?: string } }).error ?? {};
-    if (res.status === 401 && token) onUnauthenticated();
+    // The session expired or was cleared (sign-in's own 401 for a wrong password isn't that)
+    if (res.status === 401 && !path.startsWith('/auth/')) onUnauthenticated();
     throw new ApiError(
       res.status,
       err.code ?? 'UNKNOWN',
@@ -322,6 +326,7 @@ export const api = {
   login: (email: string, password: string) =>
     request<{ user: User; token: string }>('POST', '/auth/login', { body: { email, password } }),
   me: () => request<{ user: User }>('GET', '/auth/me'),
+  logout: () => request<void>('POST', '/auth/logout'),
 
   cities: () => request<{ cities: { city: string; theatres: number }[] }>('GET', '/cities'),
   movies: (f: { city?: string; genre?: string; language?: string; q?: string }) =>

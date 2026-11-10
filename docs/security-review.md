@@ -22,7 +22,7 @@ Sources for the checklist: [Escape.tech's scan of 5,600 vibe-coded apps](https:/
 | **XSS**                                                | Search for raw HTML                                                                                                            | One use: the ticket's QR code SVG, generated locally by the `qrcode` library from booking ids. Poster URLs must be `http(s)` (`javascript:` refused, tested)                                                                                                           |
 | **Vulnerable dependencies**                            | `npm audit`                                                                                                                    | Frontend: 0. Backend runtime: 3 moderate, all `node-pg-migrate` → `glob` → `minimatch` (slow regex on glob patterns; only our own fixed pattern, at startup). Dev tools: low/moderate in eslint and jest. The forced fix is a breaking downgrade; recorded, not forced |
 | **Hallucinated packages**                              | Every dependency is a well-known package that the code actually imports                                                        | None                                                                                                                                                                                                                                                                   |
-| **CSRF**                                               | Design                                                                                                                         | Not exposed today: the token is sent in a header, which other sites can't make a browser add. **Becomes relevant with cookie auth (next in this phase)**, and is handled there                                                                                         |
+| **CSRF**                                               | Design, then tests                                                                                                             | Not exposed while the token was a header. With the cookie session (Phase 16), cookie-authenticated writes require the `X-SeatLock-Client` header, plus SameSite=Lax; a forged write is refused (tested, mutation-checked)                                              |
 
 ## The Content-Security-Policy, and how it was tested
 
@@ -56,6 +56,6 @@ Testing the Cashfree checkout under the new policy exposed a Phase 14 bug: on "F
 
 ## Still true (known limitations)
 
-- The JWT is in `localStorage`, readable by any script that runs on the page. The CSP now makes injecting such a script much harder; moving the token to an httpOnly cookie removes the exposure. That's the next step of Phase 16.
+- ~~The JWT is in `localStorage`, readable by any script on the page.~~ **Done in Phase 16:** the session is now an httpOnly cookie with a CSRF header check (decisions R6–R9, `sessionCookie.test.ts`).
 - No account lockout beyond the per-IP rate limit; no password reset (no email in this project).
 - Registration says when an email is already taken (account enumeration), traded for a clear sign-up error.

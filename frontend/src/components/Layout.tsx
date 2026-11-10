@@ -135,10 +135,7 @@ function AccountMenu() {
           <button
             role="menuitem"
             type="button"
-            onClick={() => {
-              signOut();
-              navigate('/');
-            }}
+            onClick={() => void signOut().then(() => navigate('/'))}
             className="block w-full border-t border-line px-4 py-2.5 text-left text-sm text-dim hover:bg-night-3 hover:text-screen"
           >
             Sign out

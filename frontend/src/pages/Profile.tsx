@@ -42,13 +42,7 @@ export function Profile() {
             </span>
           )}
         </div>
-        <Button
-          variant="secondary"
-          onClick={() => {
-            signOut();
-            navigate('/');
-          }}
-        >
+        <Button variant="secondary" onClick={() => void signOut().then(() => navigate('/'))}>
           Sign out
         </Button>
       </section>

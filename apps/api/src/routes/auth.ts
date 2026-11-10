@@ -10,6 +10,8 @@ export function authRouter(
   const router = Router();
   router.post('/auth/register', limitByIp, controller.register);
   router.post('/auth/login', limitByIp, controller.login);
+  // No authentication needed: clearing a cookie you may not have is harmless
+  router.post('/auth/logout', controller.logout);
   router.get('/auth/me', authenticate, controller.me);
   return router;
 }
