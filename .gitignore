@@ -22,3 +22,6 @@ frontend/dist/
 # Local editor/tool settings and TypeScript build caches
 *.tsbuildinfo
 .claude/
+
+# Phase 17 interview pack: private, never pushed
+docs/interview-pack/

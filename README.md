@@ -61,7 +61,8 @@ A recording of this race and of a late payment is described in [docs/demo-script
 - **Late payments re-claim all seats or refund**, never partially confirm
 - **A worker killed mid-task loses nothing**: its lease expires, another worker re-delivers the event, and the customer still gets exactly one notification (transactional outbox, at-least-once delivery, idempotent consumers)
 - **Redis going down doesn't take the API down**: rate limiting fails open, and resumes when Redis returns
-- **103 integration tests** against a real PostgreSQL and Redis, green in CI; all 19 PRD acceptance tests (T1–T19) and all 10 core scenarios pass
+- **164 integration tests** against a real PostgreSQL and Redis, plus **6 browser tests** (Playwright, real Chrome, production build), all green in CI on every push; all 19 PRD acceptance tests (T1–T19) and all 10 core scenarios pass
+- **Security reviewed by testing** ([docs/security-review.md](docs/security-review.md)): no secrets in git or the bundle, ownership checked on every booking route, nothing personal in the logs (a test reads the real log output), a Content-Security-Policy, and sessions in an httpOnly cookie with CSRF protection
 
 Measured numbers and machine specs: [docs/results.md](docs/results.md).
 
@@ -79,9 +80,9 @@ flowchart LR
     W -->|refunds| G
 ```
 
-The **worker** runs four jobs on a loop: deliver outbox events (notifications, gateway refunds) under leases, expire abandoned holds, fail payments that never got a webhook, and delete old idempotency keys.
+The **worker** runs its jobs on a loop: deliver outbox events (notifications, gateway refunds) under leases, expire abandoned holds, fail payments that never got a webhook, delete old idempotency keys, ask Cashfree about payments still open (reconciliation, when Cashfree is configured), and keep a week of showtimes ahead while pruning old ones (on the hosted site).
 
-- **Three Node processes, one repo:** `apps/api`, `apps/worker`, `apps/mock-gateway`, with shared code in `packages/db` and `packages/shared`. The frontend is a separate package in `frontend/`.
+- **Three Node processes, one repo:** `apps/api`, `apps/worker`, `apps/mock-gateway`, with shared code in `packages/db` and `packages/shared`. On free hosting they run as one process (`apps/all-in-one`), same code. The frontend is a separate package in `frontend/`.
 - **Raw parameterized SQL**, no ORM, so locks and atomic updates are explicit.
 - **Redis** is used for rate limiting only.
 
@@ -289,13 +290,13 @@ The main ones. The full list, with rejected alternatives and reasons, is in [prd
 - **`202` plus webhook for payment**, because real gateways confirm asynchronously, and **a timeout is never treated as failure**, because the money may have moved.
 - **Late payment re-claims every seat or refunds**, never partially confirms.
 - **The rate limiter fails open**: losing Redis briefly costs abuse protection, not bookings.
-- **Known limitations:** one API process tops out at one CPU core, the payment gateway is a mock, and cancellation is whole-booking only. The complete list is at the end of [docs/decisions.md](docs/decisions.md).
+- **Known limitations:** one API process tops out at one CPU core, payments run only in Cashfree's sandbox or the simulated gateway (no real money, by design), and cancellation is whole-booking only. The complete list is at the end of [docs/decisions.md](docs/decisions.md).
 
 ## Results
 
 | Measure                         | Result                                                                                          |
 | ------------------------------- | ----------------------------------------------------------------------------------------------- |
-| Test suite                      | 103 / 103 pass on Windows, in a Linux container, and in GitHub Actions                          |
+| Test suite                      | 164 / 164 integration tests and 6 / 6 browser tests, green in GitHub Actions on every push      |
 | T1: 1,000 holds on 50 seats     | Exactly 50 × `201`, 950 × `409`, 0 × `503`                                                      |
 | k6 spike: 1,000 users, 50 seats | Always 50 winners, 0 failures, 0 deadlocks; drains in 2.8–4.1 s                                 |
 | k6 steady: 50 users, 60 s       | p95 seat map 46–62 ms, p95 hold 117–164 ms at 1,046–1,263 req/s                                 |
@@ -382,7 +383,7 @@ Errors share one shape: `{ "error": { "code", "message", "requestId" } }`.
 
 | Doc                                                    | What's in it                                                                |
 | ------------------------------------------------------ | --------------------------------------------------------------------------- |
-| [docs/prd-v2.md](docs/prd-v2.md)                       | v2 plan (in progress): movies, theatres, real checkout, deployment          |
+| [docs/prd-v2.md](docs/prd-v2.md)                       | v2 plan: movies, theatres, real checkout, admin, deployment, hardening      |
 | [prd.md](prd.md)                                       | v1 requirements: concurrency rules, state machines                          |
 | [docs/PROGRESS.md](docs/PROGRESS.md)                   | Phase status, acceptance-test checklist                                     |
 | [docs/decisions.md](docs/decisions.md)                 | Every design decision and trade-off, plus known limitations                 |
