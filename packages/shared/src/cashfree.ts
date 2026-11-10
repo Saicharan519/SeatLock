@@ -155,7 +155,10 @@ export function createCashfreeClient(opts: {
       const res = await call('POST', `/pg/orders/${oid(input.orderId)}/refunds`, {
         refund_id: input.refundId,
         refund_amount: toRupees(input.amountPaise),
-        refund_note: 'SeatLock booking refund',
+        // In the sandbox the note chooses the simulated outcome (SUCCESS, FAILED, PENDING,
+        // ACTIVE). Any other text leaves the refund ONHOLD ("insufficient refund balance"),
+        // found in the first local test. SeatLock only ever talks to the sandbox.
+        refund_note: 'SUCCESS',
       });
       if (res.ok || res.status === 409) return; // 409: this refund was already requested
       await fail('create refund', res);

@@ -37,17 +37,22 @@ function loadSdk(): Promise<void> {
 }
 
 /**
- * Opens Cashfree's checkout as a popup over the page. Resolves when the popup closes, whether
- * the customer paid, failed or gave up: the page then asks SeatLock for the real outcome,
- * which only Cashfree's server-side confirmation decides.
+ * Sends the customer to Cashfree's hosted checkout page (in the same tab). Cashfree brings
+ * them back to SeatLock's checkout page (the order's return URL, with ?order_id=...) whether
+ * they paid or not; that page then asks SeatLock for the real outcome, which only Cashfree's
+ * server-side confirmation decides.
+ *
+ * A full page rather than a popup: a card's bank OTP page opens a new window from inside a
+ * popup, which browsers block (found in the first live test).
  */
 export async function openCashfreeCheckout(paymentSessionId: string): Promise<void> {
   await loadSdk();
   const cashfree = window.Cashfree!({ mode: 'sandbox' });
-  const result = await cashfree.checkout({ paymentSessionId, redirectTarget: '_modal' });
+  const result = await cashfree.checkout({ paymentSessionId, redirectTarget: '_self' });
   if (result.error && !result.paymentDetails) {
-    // Closing the popup also lands here; it isn't an error worth alarming anyone about
+    // Cancelling or abandoning lands here too; the page shows "Finish your payment" instead
     const message = result.error.message ?? '';
-    if (!/closed|cancel/i.test(message)) throw new Error(message || 'Cashfree checkout failed');
+    if (!/closed|cancel|abort/i.test(message))
+      throw new Error(message || 'Cashfree checkout failed');
   }
 }

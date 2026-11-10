@@ -9,3 +9,16 @@ process.env.WEBHOOK_SECRET = 'test-webhook-secret-at-least-16';
 process.env.HOLD_TTL_SECONDS = '5';
 process.env.BCRYPT_ROUNDS = '4';
 process.env.RATE_LIMIT_ENABLED = 'false';
+// Never use real gateway keys from a developer's .env: tests that need Cashfree pass a fake
+// server's keys explicitly. (Assigning '' would still count as "set", so delete them.)
+for (const key of [
+  'CASHFREE_APP_ID',
+  'CASHFREE_SECRET_KEY',
+  'CASHFREE_BASE_URL',
+  'CASHFREE_NOTIFY_URL',
+  'SITE_URL',
+  'ORIGIN_SECRET',
+  'CLIENT_IP_HEADER',
+]) {
+  delete process.env[key];
+}

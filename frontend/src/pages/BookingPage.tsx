@@ -21,7 +21,8 @@ const POLL_MS = 1500;
 const STILL_PROCESSING_AFTER_MS = 60_000;
 const HOLD_SECONDS = 300;
 
-type View = 'ready' | 'expired' | 'processing' | 'confirmed' | 'failed' | 'refunding' | 'released';
+type View =
+  'ready' | 'finish' | 'expired' | 'processing' | 'confirmed' | 'failed' | 'refunding' | 'released';
 
 /** Where the booking stands, from the server's statuses (and the clock, for an unpaid hold). */
 function viewOf(b: Booking, now: number): View {
@@ -30,6 +31,16 @@ function viewOf(b: Booking, now: number): View {
   if (b.status === 'CANCELLED' && !pay) return 'released';
   if (pay === 'REFUND_REQUIRED' || pay === 'REFUNDED') return 'refunding';
   if (b.status === 'FAILED' || pay === 'FAILED') return 'failed';
+  // A Cashfree payment that's open while the hold is live: the customer may not have paid yet
+  // (closed the checkout, or came back without finishing), so offer to finish it
+  if (
+    pay === 'INITIATED' &&
+    b.payment?.provider === 'CASHFREE' &&
+    b.status === 'PENDING' &&
+    new Date(b.expiresAt).getTime() > now
+  ) {
+    return 'finish';
+  }
   if (pay === 'INITIATED') return 'processing';
   if (b.status === 'EXPIRED' || new Date(b.expiresAt).getTime() <= now) return 'expired';
   return 'ready';
@@ -240,6 +251,8 @@ export function BookingPage() {
   const [method, setMethod] = useState<PaymentProvider>('MOCK');
   const [opening, setOpening] = useState(false);
   const [searchParams] = useSearchParams();
+  /** Back from Cashfree's page (Cashfree adds ?order_id=...) */
+  const returned = Boolean(searchParams.get('order_id'));
 
   const load = useCallback(async () => {
     const { booking } = await api.booking(bookingId!);
@@ -274,7 +287,7 @@ export function BookingPage() {
   useTitle(view === 'confirmed' ? 'Your ticket' : 'Checkout');
 
   // While a payment is in flight, poll until the gateway's answer lands
-  usePolling(load, POLL_MS, view === 'processing');
+  usePolling(load, POLL_MS, view === 'processing' || view === 'finish');
   // Cashfree: also ask Cashfree directly every few seconds, in case its webhook is slow
   const viaCashfree = booking?.payment?.provider === 'CASHFREE';
   usePolling(
@@ -282,7 +295,7 @@ export function BookingPage() {
       await api.refreshPayment(bookingId!);
     },
     5000,
-    view === 'processing' && viaCashfree,
+    (view === 'processing' || view === 'finish') && viaCashfree,
   );
   useEffect(() => {
     if (view === 'processing' && processingSince === null) setProcessingSince(Date.now());
@@ -438,6 +451,38 @@ export function BookingPage() {
         </Button>
       </Panel>
     ),
+    finish: (
+      <Panel>
+        <Countdown seconds={secondsLeft} />
+        <div className="mt-6" aria-live="polite">
+          <Eyebrow>Cashfree · test mode</Eyebrow>
+          <h2 className="font-display mt-1 text-3xl font-black tracking-wide uppercase">
+            Finish your payment
+          </h2>
+          <p className="mt-3 text-sm leading-relaxed text-dim">
+            {returned
+              ? 'The payment isn’t complete yet. If you just paid, this page updates by itself within a few seconds.'
+              : 'Your seats are held. Continue to Cashfree to pay; it’s the same payment, so you can’t be charged twice.'}
+          </p>
+        </div>
+        <Button
+          onClick={() => openCheckout()}
+          disabled={opening}
+          className="mt-6 w-full py-3.5 text-base"
+        >
+          {opening ? (
+            <>
+              <Spinner /> Opening Cashfree…
+            </>
+          ) : (
+            `Continue to Cashfree · ${formatMoney(booking.totalAmount)}`
+          )}
+        </Button>
+        <Button variant="ghost" onClick={release} className="mt-2 w-full">
+          Release seats
+        </Button>
+      </Panel>
+    ),
     processing: (
       <Panel>
         <div aria-live="polite">
@@ -446,23 +491,6 @@ export function BookingPage() {
             Processing
           </h2>
           <Tracker done={1} />
-          {viaCashfree && (
-            <div className="mt-6 space-y-2">
-              <Button onClick={() => openCheckout()} disabled={opening} className="w-full">
-                {opening ? (
-                  <>
-                    <Spinner /> Opening Cashfree…
-                  </>
-                ) : (
-                  'Complete payment in Cashfree'
-                )}
-              </Button>
-              <p className="text-xs leading-relaxed text-dim">
-                Closed the Cashfree window before paying? Open it again: it's the same payment, so
-                you can't be charged twice.
-              </p>
-            </div>
-          )}
           <p className="mt-6 text-xs leading-relaxed text-faint">
             {slow
               ? 'This is taking longer than usual. You can leave this page: the result will appear in My bookings.'

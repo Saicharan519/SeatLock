@@ -78,9 +78,26 @@ All against a fake Cashfree server with the real API's paths, headers and status
 
 Suite: **138 tests** (11 new since Phase 13.5, all above). Locally, one clock-sensitive test (`holds seats and returns the booking`, and on one run T5) failed intermittently: Docker Desktop's VM clock was measured 0.5–0.7 s behind Windows after a restart, and those tests compare the database clock with the test process's clock. The same test fails one run in three on the unchanged, committed code, so it is the environment, not this phase; CI on Linux has no such drift.
 
-## Verification still to do
+## Verification against the real Cashfree sandbox
 
-The integration against **real** Cashfree sandbox needs the keys in Render's environment: an order created for real, the popup with a test card or UPI, Cashfree's actual webhook, and a refund. Recorded here after the live test.
+The first live attempt on the hosted site found two problems, so everything below was then run **locally** against Cashfree's real sandbox (keys in the local `.env`) before pushing again.
+
+| Check                                                               | Result                                                                                                                                                    |
+| ------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Pay with Cashfree → order created from SeatLock's server            | Redirected to `sandbox.cashfree.com` checkout for ₹210 (amount from the database)                                                                         |
+| Leave without paying, come back                                     | **"Finish your payment"**: hold countdown, "Continue to Cashfree · ₹210" (same order, same session), "Release seats"                                      |
+| Card 4706 1312 1121 2123 → bank OTP simulator (OTP 111000, SUCCESS) | OTP page opened in the same tab; returned to SeatLock with `?order_id=`; **"You're in"**, ticket shown                                                    |
+| Database after payment                                              | Booking CONFIRMED, payment SUCCESS via CASHFREE, 21000 paise, Cashfree payment id stored; event source **reconciliation** (no webhook can reach a laptop) |
+| Cancel → refund                                                     | Refund requested once, for the full amount; booking CANCELLED, seat freed; payment REFUND_REQUIRED, page "Refund on its way"                              |
+| Refund outcome at Cashfree                                          | `ONHOLD`: "Refund on hold because of insufficient account balance" (see below)                                                                            |
+
+### What the real sandbox found
+
+1. **A card's OTP page was blocked.** In popup mode (`redirectTarget: "_modal"`) the bank's OTP page opens a new window from inside the popup, which browsers block ("popup blocker enabled... Open Payment Page"). Checkout now uses Cashfree's full hosted page (`_self`), which returns to SeatLock's checkout with `?order_id=`; SeatLock then asks Cashfree for the result at once.
+2. **Closing Cashfree left the page on "Processing"** with Cashfree's raw "Payment has been aborted" message. A Cashfree payment that's still open while the hold is live now shows "Finish your payment" instead, and still polls, so a payment that did go through flips to the ticket by itself.
+3. **Sandbox refunds stay ONHOLD without balance.** Cashfree's sandbox picks a refund's simulated outcome from `refund_note` (`SUCCESS`, `FAILED`, `PENDING`, `ACTIVE`); free text left the first refund ONHOLD. With `refund_note: "SUCCESS"` the note arrives, but the refund is still held: "insufficient account balance". Cashfree pays refunds from the merchant's balance, and this sandbox account has none. SeatLock's side is correct (requested once, honest status, flips to Refunded when Cashfree releases it); completing a sandbox refund needs balance on the Cashfree test account. The refund path is covered end to end by the tests against the fake Cashfree server.
+4. **Tests inherited real keys from `.env`.** With Cashfree keys in the local `.env`, a test expecting "Cashfree not configured" saw Cashfree. The test setup now deletes gateway keys and proxy secrets, so tests only ever use the fake server's keys.
+5. **The hosted Cashfree webhook** (as opposed to reconciliation) is verified on the live site after this push.
 
 ## Key takeaways
 
